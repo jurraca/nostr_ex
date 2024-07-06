@@ -2,10 +2,11 @@ defmodule Nostrbase.WsClient do
   use WebSockex
 
   alias Nostrlib.Message
+  alias Nostrbase.RelayAgent
   require Logger
 
-  def start_link(%{relay_url: relay_url} = state) do
-     WebSockex.start_link(relay_url, __MODULE__, state)
+  def start_link(relay_url) do
+     WebSockex.start_link(relay_url, __MODULE__, %{relay_url: relay_url})
   end
 
   def handle_frame({:text, msg}, state) do
@@ -23,19 +24,16 @@ defmodule Nostrbase.WsClient do
 
   def handle_cast({:send, {type, msg, sub_id}}, state) do
     IO.puts "Sending #{sub_id} with frame: #{msg}"
-    new_state = %{state | subscriptions: [sub_id | state.subscriptions]}
-    {:reply, {type, msg}, new_state}
+    RelayAgent.update(self(), sub_id)
+    {:reply, {type, msg}, state}
   end
 
   def handle_cast({:close, msg}, state) do
     {:reply, msg, state}
   end
 
-  def handle_call(:get_state, _from, state) do
-    {:reply, state, state}
-  end
-
   def handle_info(msg, state) do
+    dbg(msg)
     {:ok, state}
   end
 
@@ -68,10 +66,10 @@ defmodule Nostrbase.WsClient do
     {:ok, state}
   end
 
-  defp handle_message({:closed, sub_id, msg}, %{subscriptions: subs} = state) do
+  defp handle_message({:closed, sub_id, msg}, state) do
     Logger.info("Deleting subscription #{sub_id}: #{msg}")
-    new_subscriptions = List.delete(subs, String.to_atom(sub_id))
-    {:ok, %{state | subscriptions: new_subscriptions}}
+    RelayAgent.delete(self(), sub_id)
+    {:ok, state}
   end
 
   defp handle_message({:ok, event_id, message}, state) do

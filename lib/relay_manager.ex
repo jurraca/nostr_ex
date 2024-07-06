@@ -5,8 +5,7 @@ defmodule Nostrbase.RelayManager do
   """
 
   use DynamicSupervisor
-
-  alias Nostrbase.WsClient
+  alias Nostrbase.{RelayAgent, WsClient}
 
   def start_link(opts) do
     DynamicSupervisor.start_link(opts)
@@ -18,7 +17,7 @@ defmodule Nostrbase.RelayManager do
   end
 
   def connect(relay_url) do
-    DynamicSupervisor.start_child(RelayManager, {WsClient, %{relay_url: relay_url, subscriptions: []}})
+    DynamicSupervisor.start_child(RelayManager, {WsClient, relay_url})
   end
 
   def active_pids() do
@@ -36,26 +35,19 @@ defmodule Nostrbase.RelayManager do
   end
 
   def get_active_subscriptions_by_relay() do
-    active_pids() 
-    |> Enum.map(fn pid -> 
-        case get_subs(pid) do
-            {:ok, state} -> state
-            _ -> nil
-        end
-    end)
-    |> Enum.reject(&is_nil(&1))
+    active_pids() |> Enum.map(fn pid -> {pid, get_subs(pid)} end)
   end
 
-  def get_state(pid) do
-     GenServer.call(pid, :get_state)
+  def get_relays_by_sub do
+    state = RelayAgent.state()
+    Enum.reduce(state, %{}, fn {pid, subs}, acc ->
+      Enum.map(subs, fn sub ->
+        Map.update(acc, sub, [pid], fn existing -> [pid | existing] end)
+      end)
+    end)
   end
 
   defp get_pid({:undefined, pid, :worker, [WsClient]}), do: pid
 
-  defp get_subs(pid) do
-      case send(pid, :get_state) do
-          {:ok, %{subscriptions: subs}} -> subs
-          _ -> nil
-      end
-  end
+  defp get_subs(pid), do: RelayAgent.get(pid)
 end
