@@ -9,12 +9,13 @@ defmodule Nostrbase.Application do
          keys: :duplicate,
          name: Registry.PubSub,
          partitions: System.schedulers_online()
-       ]}
+       ]},
+      {Nostrbase.RelayAgent, %{}}
     ]
 
     Supervisor.start_link(children, strategy: :one_for_one)
   end
-  
+
   def get_relays() do
     Application.get_env(:nostrbase, :relays)
   end
