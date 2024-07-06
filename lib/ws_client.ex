@@ -4,13 +4,11 @@ defmodule Nostrbase.WsClient do
   alias Nostrlib.Message
   require Logger
 
-  def start_link(relay_url) do
-     WebSockex.start_link(relay_url, __MODULE__, %{relay_url: relay_url})
+  def start_link(%{relay_url: relay_url} = state) do
+     WebSockex.start_link(relay_url, __MODULE__, state)
   end
 
   def handle_frame({:text, msg}, state) do
-    IO.puts "Received a message: #{msg}"
-    
     msg
     |> Message.parse()
     |> handle_message(state)
@@ -19,23 +17,36 @@ defmodule Nostrbase.WsClient do
   end
 
   def handle_cast({:send, {type, msg} = frame}, state) do
-    IO.puts "Sending #{type} frame with payload: #{msg}"
-    dbg(state)
+    Logger.info("Sending #{type} frame with payload: #{msg}")
     {:reply, frame, state}
   end
 
-  def handle_cast({:send, {type, msg, sub_id} = frame}, state) do
-    IO.puts "Sending #{type} frame with payload: #{msg}"
-    IO.inspect(state)
-    {:reply, frame, state}
+  def handle_cast({:send, {type, msg, sub_id}}, state) do
+    IO.puts "Sending #{sub_id} with frame: #{msg}"
+    new_state = %{state | subscriptions: [sub_id | state.subscriptions]}
+    {:reply, {type, msg}, new_state}
   end
-  
-  defp handle_message({:event, subscription_id, _} = message, state) do
+
+  def handle_cast({:close, msg}, state) do
+    {:reply, msg, state}
+  end
+
+  def handle_call(:get_state, _from, state) do
+    {:reply, state, state}
+  end
+
+  def handle_info(msg, state) do
+    {:ok, state}
+  end
+
+  defp handle_message({:event, subscription_id, event}, state) do
     Logger.info("received event for sub_id #{subscription_id}")
 
     subscription_id
     |> String.to_atom()
-    |> registry_dispatch(message)
+    |> registry_dispatch(event)
+
+    dbg(event)
 
     {:ok, state}
   end
@@ -50,11 +61,9 @@ defmodule Nostrbase.WsClient do
          {:end_of_stored_events, subscription_id},
           state
        ) do
-    message = {:end_of_stored_events, subscription_id}
-
     subscription_id
     |> String.to_atom()
-    |> registry_dispatch(message)
+    |> registry_dispatch("EOSE")
 
     {:ok, state}
   end
@@ -65,7 +74,6 @@ defmodule Nostrbase.WsClient do
     {:ok, %{state | subscriptions: new_subscriptions}}
   end
 
-  
   defp handle_message({:ok, event_id, message}, state) do
     Logger.info("OK event #{event_id} from #{state.relay_url}")
     # GenServer.reply(from, {:ok, event_id, message})
@@ -90,8 +98,13 @@ defmodule Nostrbase.WsClient do
     {:ok, state}
   end
 
+  def terminate({:remote, :closed}, state) do
+    Logger.info("Remote closed the connection - #{state.relay_url}")
+    {:ok, state}
+  end
+
   def terminate(close_reason, state) do
-    Logger.info(close_reason)
+    dbg(close_reason)
     {:ok, state}
   end
 
