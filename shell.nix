@@ -3,9 +3,8 @@
 }: let
   # define packages to install
   basePackages = with pkgs; [
-    git
     elixir
-    beamPackages.hex
+    hex
     rebar3
     mix2nix
   # Phoenix stuff

@@ -14,10 +14,17 @@
         overlay = final: prev: {
 	    beamPackages = beamPackages;
 	    elixir = final.beamPackages.elixir_1_16;
-	};
+	    hex = final.beamPackages.hex.overrideAttrs {
+		buildInputs = [ final.elixir ];
+	    };
+            rebar3 = final.beamPackages.rebar3;
+	    mix2nix = prev.mix2nix.overrideAttrs {
+                buildInputs = [ final.beamPackages.erlang ];
+	    };
+        };
         # Declare pkgs for the specific target system we're building for.
-        pkgs = import nixpkgs { 
-	    inherit system ; 
+        pkgs = import nixpkgs {
+	    inherit system ;
 	    overlays = [overlay];
 	};
         # Import a development shell we'll declare in `shell.nix`.
