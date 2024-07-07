@@ -7,7 +7,7 @@ defmodule Nostrbase.Application do
       {Registry,
        [
          keys: :duplicate,
-         name: Registry.PubSub,
+         name: Nostrbase.PubSub,
          partitions: System.schedulers_online()
        ]},
       {Nostrbase.RelayAgent, %{}}

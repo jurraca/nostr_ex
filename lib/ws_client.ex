@@ -6,7 +6,7 @@ defmodule Nostrbase.WsClient do
   require Logger
 
   def start_link(relay_url) do
-     WebSockex.start_link(relay_url, __MODULE__, %{relay_url: relay_url})
+    WebSockex.start_link(relay_url, __MODULE__, %{relay_url: relay_url})
   end
 
   def handle_frame({:text, msg}, state) do
@@ -23,7 +23,7 @@ defmodule Nostrbase.WsClient do
   end
 
   def handle_cast({:send, {type, msg, sub_id}}, state) do
-    IO.puts "Sending #{sub_id} with frame: #{msg}"
+    IO.puts("Sending #{sub_id} with frame: #{msg}")
     RelayAgent.update(self(), sub_id)
     {:reply, {type, msg}, state}
   end
@@ -44,8 +44,6 @@ defmodule Nostrbase.WsClient do
     |> String.to_atom()
     |> registry_dispatch(event)
 
-    dbg(event)
-
     {:ok, state}
   end
 
@@ -57,7 +55,7 @@ defmodule Nostrbase.WsClient do
 
   defp handle_message(
          {:end_of_stored_events, subscription_id},
-          state
+         state
        ) do
     subscription_id
     |> String.to_atom()
@@ -98,11 +96,13 @@ defmodule Nostrbase.WsClient do
 
   def terminate({:remote, :closed}, state) do
     Logger.info("Remote closed the connection - #{state.relay_url}")
+    RelayAgent.delete(self())
     {:ok, state}
   end
 
   def terminate(close_reason, state) do
-    dbg(close_reason)
+    Logger.info(close_reason)
+    RelayAgent.delete(self())
     {:ok, state}
   end
 
@@ -110,7 +110,7 @@ defmodule Nostrbase.WsClient do
   Send a message to a given pubsub topic
   """
   def registry_dispatch(sub_id, message) when is_atom(sub_id) do
-    Registry.dispatch(Registry.PubSub, sub_id, fn entries ->
+    Registry.dispatch(Nostrbase.PubSub, sub_id, fn entries ->
       for {pid, _} <- entries, do: send(pid, message)
     end)
   end

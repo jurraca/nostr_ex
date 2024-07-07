@@ -40,6 +40,7 @@ defmodule Nostrbase.RelayManager do
 
   def get_relays_by_sub do
     state = RelayAgent.state()
+
     Enum.reduce(state, %{}, fn {pid, subs}, acc ->
       Enum.map(subs, fn sub ->
         Map.update(acc, sub, [pid], fn existing -> [pid | existing] end)
