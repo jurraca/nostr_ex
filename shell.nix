@@ -5,7 +5,6 @@
   basePackages = with pkgs; [
     elixir
     hex
-    rebar3
     mix2nix
   # Phoenix stuff
   # postgresql_15
