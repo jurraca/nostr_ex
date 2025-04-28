@@ -82,13 +82,11 @@ defmodule Nostrbase.Socket do
   defp handle_responses(state, responses)
 
   defp handle_responses(%{request_ref: ref} = state, [{:status, ref, status} | rest]) do
-    dbg(status)
     put_in(state.status, status)
     |> handle_responses(rest)
   end
 
   defp handle_responses(%{request_ref: ref} = state, [{:headers, ref, resp_headers} | rest]) do
-    dbg(resp_headers)
     put_in(state.resp_headers, resp_headers)
     |> handle_responses(rest)
   end

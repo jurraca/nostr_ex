@@ -23,7 +23,8 @@ defmodule Nostrbase.MixProject do
   defp deps do
     [
       {:websockex, "~> 0.4.3"},
-      {:nostrlib, path: "/home/base/code/nostrlib"}
+      {:nostr_lib, "~> 0.1.1"},
+      {:mint_web_socket, "~> 1.0.3"}
     ]
   end
 end
