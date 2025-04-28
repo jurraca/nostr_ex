@@ -5,7 +5,7 @@ defmodule Nostrbase.RelayManager do
   """
 
   use DynamicSupervisor
-  alias Nostrbase.{RelayAgent, WsClient}
+  alias Nostrbase.{RelayAgent, Socket}
 
   def start_link(opts) do
     DynamicSupervisor.start_link(opts)
@@ -17,7 +17,11 @@ defmodule Nostrbase.RelayManager do
   end
 
   def connect(relay_url) do
-    DynamicSupervisor.start_child(RelayManager, {WsClient, relay_url})
+    DynamicSupervisor.start_child(RelayManager, {Socket, %{url: relay_url}})
+  end
+
+  def relays() do
+    DynamicSupervisor.which_children(RelayManager)
   end
 
   def active_pids() do
@@ -48,7 +52,7 @@ defmodule Nostrbase.RelayManager do
     end)
   end
 
-  defp get_pid({:undefined, pid, :worker, [WsClient]}), do: pid
+  defp get_pid({:undefined, pid, :worker, [Socket]}), do: pid
 
   defp get_subs(pid), do: RelayAgent.get(pid)
 end
