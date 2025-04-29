@@ -33,6 +33,12 @@ defmodule Nostrbase.Socket do
   end
 
   @impl GenServer
+  def handle_continue(:connect, %{url: "http" <> _rest = url} = state) do
+    reason =  "The relay URL must be a websocket, not an HTTP URL, got: #{url}"
+    {:stop, {:invalid_protocol, reason}, state}
+  end
+
+  @impl GenServer
   def handle_continue(:connect, %{url: url} = state) do
     uri = URI.parse(url)
 
@@ -212,7 +218,14 @@ defmodule Nostrbase.Socket do
 
   @impl GenServer
   def terminate({:remote, :closed}, state) do
-    Logger.info("Remote closed the connection - #{state.relay_url}")
+    Logger.info("Remote closed the connection - #{state.url}")
+    RelayAgent.delete(self())
+    {:ok, state}
+  end
+
+  @impl GenServer
+  def terminate({err, reason}, state) do
+    Logger.error("Socket Error: #{err} #{reason}- #{state.url}")
     RelayAgent.delete(self())
     {:ok, state}
   end
