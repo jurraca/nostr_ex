@@ -27,8 +27,8 @@ defmodule Nostrbase.Socket do
   end
 
   @impl GenServer
-  def init(url) do
-    {:ok, %__MODULE__{url: url}, {:continue, :connect}}
+  def init(uri) do
+    {:ok, %__MODULE__{uri: uri}}
   end
 
   @impl GenServer
@@ -38,15 +38,7 @@ defmodule Nostrbase.Socket do
   end
 
   @impl GenServer
-  def handle_continue(:connect, %{url: "http" <> _rest = url} = state) do
-    reason =  "The relay URL must be a websocket, not an HTTP URL, got: #{url}"
-    {:stop, {:invalid_protocol, reason}, state}
-  end
-
-  @impl GenServer
-  def handle_continue(:connect, %{url: url} = state) do
-    uri = URI.parse(url)
-
+  def handle_call(:connect, from, %{uri: uri} = state) do
     http_scheme =
       case uri.scheme do
         "ws" -> :http
@@ -182,7 +174,7 @@ defmodule Nostrbase.Socket do
   end
 
   defp handle_message({:notice, message}, state) do
-    Logger.info("NOTICE from #{state.relay_url}: #{message}")
+    Logger.info("NOTICE from #{state.url.host}: #{message}")
     registry_dispatch(:notice, message)
     {:ok, state}
   end
@@ -202,7 +194,7 @@ defmodule Nostrbase.Socket do
   end
 
   defp handle_message({:ok, event_id, success, message}, state) do
-    Logger.info("OK event #{event_id} from #{state.relay_url}, success? #{success}")
+    Logger.info("OK event #{event_id} from #{state.uri.host}, success? #{success}")
     # GenServer.reply(from, {:ok, event_id, message})
     registry_dispatch(:ok, message)
     {:ok, state}
@@ -256,5 +248,20 @@ defmodule Nostrbase.Socket do
     Registry.dispatch(Nostrbase.PubSub, sub_id, fn entries ->
       for {pid, _} <- entries, do: send(pid, message)
     end)
+  end
+
+  defp parse_url("http" <> _rest = url) do
+    reason = "The relay URL must be a websocket, not an HTTP URL, got: #{url}"
+    {:error, reason}
+  end
+
+  defp parse_url(url) do
+    uri = URI.parse(url) |> Map.update!(:path, &(&1 || "/" ))
+
+    if uri.host do
+      {:ok, uri}
+    else
+      {:error, "Invalid host for URL #{url}, got: #{uri.host || "empty"} "}
+    end
   end
 end
