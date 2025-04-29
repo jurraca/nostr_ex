@@ -3,7 +3,7 @@ defmodule Nostrbase.Application do
 
   def start(_type, _args) do
     children = [
-      {Nostrbase.RelayManager, name: RelayManager, strategy: :one_for_one},
+      {Nostrbase.RelayManager, name: RelaySupervisor, strategy: :one_for_one},
       {Registry,
        [
          keys: :duplicate,

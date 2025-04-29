@@ -1,5 +1,5 @@
 defmodule Nostrbase.Socket do
-  use GenServer
+  use GenServer, restart: :transient
 
   require Logger
   require Mint.HTTP
@@ -7,14 +7,19 @@ defmodule Nostrbase.Socket do
   alias Nostrbase.RelayAgent
   alias Nostr.Message
 
-  defstruct [:url, :conn, :websocket, :request_ref, :caller, :status, :resp_headers, :closing?]
+  defstruct [:uri, :conn, :websocket, :request_ref, :caller, :status, :resp_headers, :closing?]
 
   def start_link(%{url: url}) do
-    GenServer.start_link(__MODULE__, url)
+    case parse_url(url) do
+      {:ok, uri} -> GenServer.start_link(__MODULE__, uri)
+      {:error, reason} -> {:error, reason}
+    end
   end
 
-  def connect(url) do
-    GenServer.call(__MODULE__, {:connect, url})
+  def connect(pid) do
+    with {:ok, :connected} <- GenServer.call(pid, :connect) do
+      {:ok, pid}
+    end
   end
 
   def send_message(pid, text) do
@@ -54,18 +59,16 @@ defmodule Nostrbase.Socket do
         "wss" -> :wss
       end
 
-    path = uri.path || "/"
-
-    with {:ok, conn} <- Mint.HTTP.connect(http_scheme, uri.host, uri.port),
-         {:ok, conn, ref} <- Mint.WebSocket.upgrade(ws_scheme, conn, path, []) do
-      state = %{state | conn: conn, request_ref: ref}
+    with {:ok, conn} <- Mint.HTTP.connect(http_scheme, uri.host, uri.port, protocols: [:http1]),
+         {:ok, conn, ref} <- Mint.WebSocket.upgrade(ws_scheme, conn, uri.path, []) do
+      state = %{state | conn: conn, request_ref: ref, caller: from}
       {:noreply, state}
     else
       {:error, reason} ->
-        {:reply, {:error, reason}, state}
+        {:stop, :normal, state}
 
       {:error, conn, reason} ->
-        {:reply, {:error, reason}, put_in(state.conn, conn)}
+        {:stop, {:error, reason}, put_in(state.conn, conn)}
     end
   end
 
@@ -218,16 +221,15 @@ defmodule Nostrbase.Socket do
 
   @impl GenServer
   def terminate({:remote, :closed}, state) do
-    Logger.info("Remote closed the connection - #{state.url}")
+    Logger.info("Remote closed the connection - #{state.uri.host}")
     RelayAgent.delete(self())
-    {:ok, state}
+    {:stop, :closed, state}
   end
 
   @impl GenServer
-  def terminate({err, reason}, state) do
-    Logger.error("Socket Error: #{err} #{reason}- #{state.url}")
+  def terminate(reason, state) do
+    Logger.error("Terminating #{state.uri.host} ")
     RelayAgent.delete(self())
-    {:ok, state}
   end
 
   defp do_close(state) do

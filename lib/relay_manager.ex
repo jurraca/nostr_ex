@@ -7,25 +7,30 @@ defmodule Nostrbase.RelayManager do
   use DynamicSupervisor
   alias Nostrbase.{RelayAgent, Socket}
 
+  @name RelaySupervisor
+
   def start_link(opts) do
     DynamicSupervisor.start_link(opts)
   end
 
   @impl true
-  def init(args) do
-    {:ok, args}
+  def init(opts) do
+    DynamicSupervisor.init(opts)
   end
 
   def connect(relay_url) do
-    DynamicSupervisor.start_child(RelayManager, {Socket, %{url: relay_url}})
+   with {:ok, pid} <- DynamicSupervisor.start_child(@name, {Socket, %{url: relay_url}}),
+        {:ok, socket} <- Socket.connect(pid) do
+      {:ok, pid}
+    end
   end
 
   def relays() do
-    DynamicSupervisor.which_children(RelayManager)
+    DynamicSupervisor.which_children(@name)
   end
 
   def active_pids() do
-    RelayManager
+    @name
     |> DynamicSupervisor.which_children()
     |> Enum.map(&get_pid/1)
   end
