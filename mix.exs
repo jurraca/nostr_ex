@@ -22,7 +22,6 @@ defmodule Nostrbase.MixProject do
   # Run "mix help deps" to learn about dependencies.
   defp deps do
     [
-      {:websockex, "~> 0.4.3"},
       {:nostr_lib, "~> 0.1.1"},
       {:mint_web_socket, "~> 1.0.3"}
     ]
