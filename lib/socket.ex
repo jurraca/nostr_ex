@@ -13,7 +13,7 @@ defmodule Nostrbase.Socket do
     case parse_url(url) do
       {:ok, uri} -> 
         name = uri.host |> String.replace(".", "_") |> String.to_atom()
-        GenServer.start_link(__MODULE__, uri, name: name)
+        GenServer.start_link(__MODULE__, uri, name: {:via, Registry, {Nostrbase.RelayRegistry, name}})
       {:error, reason} -> {:error, reason}
     end
   end
