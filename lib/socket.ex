@@ -192,7 +192,7 @@ defmodule Nostrbase.Socket do
 
   defp handle_message({:close, sub_id}, state) do
     Logger.info("Deleting subscription #{sub_id}")
-    RelayAgent.delete(self(), sub_id)
+    RelayAgent.delete_subscription(self(), sub_id)
     {:ok, state}
   end
 
@@ -217,14 +217,14 @@ defmodule Nostrbase.Socket do
   @impl GenServer
   def terminate({:remote, :closed}, state) do
     Logger.info("Remote closed the connection - #{state.uri.host}")
-    RelayAgent.delete(self())
+    RelayAgent.delete_relay(self())
     {:stop, :closed, state}
   end
 
   @impl GenServer
   def terminate(_reason, state) do
     Logger.error("Terminating #{state.uri.host} ")
-    RelayAgent.delete(self())
+    RelayAgent.delete_relay(self())
   end
 
   defp do_close(state) do
