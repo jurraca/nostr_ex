@@ -59,6 +59,7 @@ defmodule Nostrbase.Socket do
       {:noreply, state}
     else
       {:error, reason} ->
+        Logger.error(reason)
         {:stop, :normal, state}
 
       {:error, conn, reason} ->
@@ -221,7 +222,7 @@ defmodule Nostrbase.Socket do
   end
 
   @impl GenServer
-  def terminate(reason, state) do
+  def terminate(_reason, state) do
     Logger.error("Terminating #{state.uri.host} ")
     RelayAgent.delete(self())
   end

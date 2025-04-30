@@ -20,7 +20,7 @@ defmodule Nostrbase.RelayManager do
 
   def connect(relay_url) do
    with {:ok, pid} <- DynamicSupervisor.start_child(@name, {Socket, %{url: relay_url}}),
-        {:ok, socket} <- Socket.connect(pid) do
+        {:ok, _} <- Socket.connect(pid) do
       {:ok, pid}
     end
   end
