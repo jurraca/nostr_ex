@@ -56,15 +56,30 @@ defmodule Nostrbase.Client do
   end
 
   def create_sub(opts) when is_list(opts) do
-    with filter <- Map.merge(%Filter{}, Enum.into(opts, %{})),
-         sub_id <- :crypto.strong_rand_bytes(32) |> Base.encode16(case: :lower) do
-      msg =
-        [filter]
-        |> Message.request(sub_id)
-        |> Message.serialize()
-
-      {:ok, sub_id, msg}
+    cond do
+      # Single filter as keyword list
+      Keyword.keyword?(opts) ->
+        filter = Map.merge(%Filter{}, Enum.into(opts, %{}))
+        do_create_sub([filter])
+        
+      # Multiple filters as list of keyword lists
+      Enum.all?(opts, &Keyword.keyword?/1) ->
+        filters = Enum.map(opts, &Map.merge(%Filter{}, Enum.into(&1, %{})))
+        do_create_sub(filters)
+        
+      true ->
+        {:error, "Invalid filter format"}
     end
+  end
+
+  defp do_create_sub(filters) when is_list(filters) do
+    sub_id = :crypto.strong_rand_bytes(32) |> Base.encode16(case: :lower)
+    msg = 
+      filters
+      |> Message.request(sub_id)
+      |> Message.serialize()
+
+    {:ok, sub_id, msg}
   end
 
   def subscribe(relay_name, sub_id, payload) when is_binary(sub_id) do
