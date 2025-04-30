@@ -5,7 +5,7 @@ defmodule Nostrbase.Socket do
   require Mint.HTTP
 
   alias Nostrbase.RelayAgent
-  alias Nostr.Message
+  alias Nostr.{Event, Message}
 
   defstruct [:uri, :conn, :websocket, :request_ref, :caller, :status, :resp_headers, :closing?, :name]
 
@@ -173,7 +173,11 @@ defmodule Nostrbase.Socket do
 
   defp handle_message({:event, subscription_id, event}, state) do
     Logger.info("received event for sub_id #{subscription_id}")
-    registry_dispatch(subscription_id, event)
+    if Event.parse(event) do
+      registry_dispatch(subscription_id, event)
+    else
+      Logger.info("invalid event received with id: #{event.id}")
+    end
     {:ok, state}
   end
 
