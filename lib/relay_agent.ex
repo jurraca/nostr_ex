@@ -1,6 +1,6 @@
 defmodule Nostrbase.RelayAgent do
   @moduledoc """
-    State machine that maps relay connections to their active subscriptions.
+    Agent that maps relay connections to their active subscriptions.
     We use this to manage subscription lifecycle and track which relays have which subscriptions.
   """
   use Agent
