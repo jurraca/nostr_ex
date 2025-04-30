@@ -19,8 +19,8 @@ defmodule Nostrbase.RelayManager do
   end
 
   def connect(relay_url) do
-   with {:ok, pid} <- DynamicSupervisor.start_child(@name, {Socket, %{url: relay_url}}),
-        {:ok, _} <- Socket.connect(pid) do
+    with {:ok, pid} <- DynamicSupervisor.start_child(@name, {Socket, %{url: relay_url}}),
+         {:ok, _} <- Socket.connect(pid) do
       {:ok, pid}
     end
   end
@@ -39,7 +39,7 @@ defmodule Nostrbase.RelayManager do
     @name
     |> DynamicSupervisor.which_children()
     |> Enum.map(&get_pid/1)
-    |> Enum.map(fn pid -> 
+    |> Enum.map(fn pid ->
       Registry.keys(Nostrbase.RelayRegistry, pid) |> List.first()
     end)
     |> Enum.reject(&is_nil/1)

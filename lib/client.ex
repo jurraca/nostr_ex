@@ -41,29 +41,30 @@ defmodule Nostrbase.Client do
   end
 
   def create_note(note, privkey) do
-      note
-      |> Event.Note.create()
-      |> Event.sign(privkey)
-      |> Message.create_event()
-      |> Message.serialize()
+    note
+    |> Event.Note.create()
+    |> Event.sign(privkey)
+    |> Message.create_event()
+    |> Message.serialize()
   end
 
   def create_long_form(text, privkey) do
-    Event.create(23, [content: text])
+    Event.create(23, content: text)
     |> Event.sign(privkey)
     |> Message.create_event()
     |> Message.serialize()
   end
 
   def create_sub(opts) when is_list(opts) do
-     with filter <- Map.merge(%Filter{}, Enum.into(opts, %{})),
-       sub_id <- :crypto.strong_rand_bytes(32) |> Base.encode16(case: :lower) do
-       msg = [filter]
+    with filter <- Map.merge(%Filter{}, Enum.into(opts, %{})),
+         sub_id <- :crypto.strong_rand_bytes(32) |> Base.encode16(case: :lower) do
+      msg =
+        [filter]
         |> Message.request(sub_id)
         |> Message.serialize()
 
-       {:ok, sub_id, msg}
-     end
+      {:ok, sub_id, msg}
+    end
   end
 
   def subscribe(relay_name, sub_id, payload) when is_binary(sub_id) do

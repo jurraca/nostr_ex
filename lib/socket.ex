@@ -7,14 +7,29 @@ defmodule Nostrbase.Socket do
   alias Nostrbase.RelayAgent
   alias Nostr.{Event, Message}
 
-  defstruct [:uri, :conn, :websocket, :request_ref, :caller, :status, :resp_headers, :closing?, :name]
+  defstruct [
+    :uri,
+    :conn,
+    :websocket,
+    :request_ref,
+    :caller,
+    :status,
+    :resp_headers,
+    :closing?,
+    :name
+  ]
 
   def start_link(%{url: url}) do
     case parse_url(url) do
-      {:ok, uri} -> 
+      {:ok, uri} ->
         name = uri.host |> String.replace(".", "_") |> String.to_atom()
-        GenServer.start_link(__MODULE__, uri, name: {:via, Registry, {Nostrbase.RelayRegistry, name}})
-      {:error, reason} -> {:error, reason}
+
+        GenServer.start_link(__MODULE__, uri,
+          name: {:via, Registry, {Nostrbase.RelayRegistry, name}}
+        )
+
+      {:error, reason} ->
+        {:error, reason}
     end
   end
 
@@ -160,8 +175,8 @@ defmodule Nostrbase.Socket do
         Logger.debug("Received: #{inspect(text)}")
 
         text
-          |> Message.parse()
-          |> handle_message(state)
+        |> Message.parse()
+        |> handle_message(state)
 
         state
 
@@ -173,11 +188,13 @@ defmodule Nostrbase.Socket do
 
   defp handle_message({:event, subscription_id, event}, state) do
     Logger.info("received event for sub_id #{subscription_id}")
+
     if Event.parse(event) do
       registry_dispatch(subscription_id, event)
     else
       Logger.info("invalid event received with id: #{event.id}")
     end
+
     {:ok, state}
   end
 
@@ -191,7 +208,7 @@ defmodule Nostrbase.Socket do
          {:eose, subscription_id},
          state
        ) do
-    registry_dispatch( subscription_id, "EOSE")
+    registry_dispatch(subscription_id, "EOSE")
     {:ok, state}
   end
 
@@ -262,7 +279,7 @@ defmodule Nostrbase.Socket do
   end
 
   defp parse_url(url) do
-    uri = URI.parse(url) |> Map.update!(:path, &(&1 || "/" ))
+    uri = URI.parse(url) |> Map.update!(:path, &(&1 || "/"))
 
     if uri.host do
       {:ok, uri}

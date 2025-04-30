@@ -1,4 +1,3 @@
-
 defmodule Nostrbase.RelayAgent do
   @moduledoc """
     State machine that maps relay connections to their active subscriptions.
