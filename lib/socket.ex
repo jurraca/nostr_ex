@@ -7,7 +7,7 @@ defmodule Nostrbase.Socket do
   alias Nostrbase.RelayAgent
   alias Nostr.Message
 
-  defstruct [:uri, :conn, :websocket, :request_ref, :caller, :status, :resp_headers, :closing?]
+  defstruct [:uri, :conn, :websocket, :request_ref, :caller, :status, :resp_headers, :closing?, :name]
 
   def start_link(%{url: url}) do
     case parse_url(url) do
@@ -30,7 +30,8 @@ defmodule Nostrbase.Socket do
 
   @impl GenServer
   def init(uri) do
-    {:ok, %__MODULE__{uri: uri}}
+    name = uri.host |> String.replace(".", "_") |> String.to_atom()
+    {:ok, %__MODULE__{uri: uri, name: name}}
   end
 
   @impl GenServer
@@ -192,20 +193,18 @@ defmodule Nostrbase.Socket do
 
   defp handle_message({:close, sub_id}, state) do
     Logger.info("Deleting subscription #{sub_id}")
-    RelayAgent.delete_subscription(self(), sub_id)
+    RelayAgent.delete_subscription(state.name, sub_id)
     {:ok, state}
   end
 
   defp handle_message({:ok, event_id, success, message}, state) do
     Logger.info("OK event #{event_id} from #{state.uri.host}, success? #{success}")
-    # GenServer.reply(from, {:ok, event_id, message})
     registry_dispatch(:ok, message)
     {:ok, state}
   end
 
   defp handle_message(:error, state) do
     Logger.error(state)
-    #registry_dispatch(:error, message)
     {:ok, state}
   end
 
@@ -217,14 +216,14 @@ defmodule Nostrbase.Socket do
   @impl GenServer
   def terminate({:remote, :closed}, state) do
     Logger.info("Remote closed the connection - #{state.uri.host}")
-    RelayAgent.delete_relay(self())
+    RelayAgent.delete_relay(state.name)
     {:stop, :closed, state}
   end
 
   @impl GenServer
   def terminate(_reason, state) do
     Logger.error("Terminating #{state.uri.host} ")
-    RelayAgent.delete_relay(self())
+    RelayAgent.delete_relay(state.name)
   end
 
   defp do_close(state) do

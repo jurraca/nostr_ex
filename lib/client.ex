@@ -27,7 +27,7 @@ defmodule Nostrbase.Client do
   def close_sub(relay_pid, sub_id) do
     request = Nostr.Message.close(sub_id)
     send_event(relay_pid, request)
-    RelayAgent.delete(relay_pid, sub_id)
+    RelayAgent.delete_subscription(relay_pid, sub_id)
   end
 
   def close_conn(relay_pid) do
