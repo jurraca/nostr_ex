@@ -35,6 +35,16 @@ defmodule Nostrbase.RelayManager do
     |> Enum.map(&get_pid/1)
   end
 
+  def active_names() do
+    @name
+    |> DynamicSupervisor.which_children()
+    |> Enum.map(&get_pid/1)
+    |> Enum.map(fn pid -> 
+      Registry.keys(Nostrbase.RelayRegistry, pid) |> List.first()
+    end)
+    |> Enum.reject(&is_nil/1)
+  end
+
   def get_active_subscriptions() do
     active_pids()
     |> Enum.map(fn pid -> get_subs(pid) end)
