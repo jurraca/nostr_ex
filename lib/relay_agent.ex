@@ -1,7 +1,8 @@
+
 defmodule Nostrbase.RelayAgent do
   @moduledoc """
-    State machine that maps PIDs holding relay websocket connections and the subscriptions active on those connections.
-    We use this to manage the state of the subscription lifecycle.
+    State machine that maps relay connections to their active subscriptions.
+    We use this to manage subscription lifecycle and track which relays have which subscriptions.
   """
   use Agent
 
@@ -13,13 +14,21 @@ defmodule Nostrbase.RelayAgent do
     Agent.get(__MODULE__, & &1)
   end
 
-  def get(key) do
-    Agent.get(__MODULE__, &Map.get(&1, key))
+  def get(relay_id) do
+    Agent.get(__MODULE__, &Map.get(&1, relay_id))
   end
 
-  def update(pid, sub_id) do
+  def get_relays_for_sub(sub_id) do
+    Agent.get(__MODULE__, fn state ->
+      state
+      |> Enum.filter(fn {_relay, subs} -> sub_id in subs end)
+      |> Enum.map(fn {relay, _subs} -> relay end)
+    end)
+  end
+
+  def update(relay_id, sub_id) do
     Agent.update(__MODULE__, fn state ->
-      Map.update(state, pid, [sub_id], fn existing ->
+      Map.update(state, relay_id, [sub_id], fn existing ->
         if sub_id in existing do
           existing
         else
@@ -29,14 +38,14 @@ defmodule Nostrbase.RelayAgent do
     end)
   end
 
-  def delete(pid, sub_id) do
+  def delete_subscription(relay_id, sub_id) do
     Agent.update(
       __MODULE__,
-      &Map.update!(&1, pid, fn existing -> List.delete(existing, sub_id) end)
+      &Map.update!(&1, relay_id, fn existing -> List.delete(existing, sub_id) end)
     )
   end
 
-  def delete(pid) do
-    Agent.update(__MODULE__, &Map.delete(&1, pid))
+  def delete_relay(relay_id) do
+    Agent.update(__MODULE__, &Map.delete(&1, relay_id))
   end
 end
