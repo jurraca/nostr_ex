@@ -11,7 +11,9 @@ defmodule Nostrbase.Socket do
 
   def start_link(%{url: url}) do
     case parse_url(url) do
-      {:ok, uri} -> GenServer.start_link(__MODULE__, uri)
+      {:ok, uri} -> 
+        name = uri.host |> String.replace(".", "_") |> String.to_atom()
+        GenServer.start_link(__MODULE__, uri, name: name)
       {:error, reason} -> {:error, reason}
     end
   end
