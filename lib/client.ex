@@ -99,7 +99,12 @@ defmodule Nostrbase.Client do
   defp do_event_send(privkey, arg, create_fun, opts) do
     with {:ok, relay_names} <- get_relays(opts[:send_via]),
          json_event <- create_fun.(arg, privkey) do
-      Enum.each(relay_names, &send_event(&1, json_event))
+      results = Enum.map(relay_names, &send_event(&1, json_event))
+
+      case Enum.all?(results, &(&1 == :ok)) do
+        true -> {:ok, :sent}
+        false -> {:error, Enum.filter(results, &match?({:error, _}, &1))}
+      end
     else
       {:error, reason} -> {:error, reason}
       _ -> {:error, "Invalid event submitted with argument \"#{arg}\" "}
@@ -109,8 +114,12 @@ defmodule Nostrbase.Client do
   defp do_subscribe_send(filter, opts) do
     with {:ok, relay_names} <- get_relays(opts[:send_via]),
          {:ok, sub_id, message} <- create_sub(filter) do
-      # validate all responses and collect errors
-      Enum.each(relay_names, &subscribe(&1, sub_id, message))
+      results = Enum.map(relay_names, &subscribe(&1, sub_id, message))
+
+      case Enum.all?(results, &match?({:ok, _}, &1)) do
+        true -> {:ok, sub_id}
+        false -> {:error, Enum.filter(results, &match?({:error, _}, &1))}
+      end
     else
       {:error, reason} -> {:error, reason}
     end
@@ -120,7 +129,7 @@ defmodule Nostrbase.Client do
   defp get_relays(:all), do: {:ok, RelayManager.active_names()}
 
   defp get_relays([_h | _t] = relay_list) do
-    case Enum.all?(relay_list, &is_binary(&1)) do
+    case Enum.all?(relay_list, &is_atom(&1)) do
       false -> {:error, "One or more relay names provided were invalid."}
       true -> {:ok, relay_list}
     end

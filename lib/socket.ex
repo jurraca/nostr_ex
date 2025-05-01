@@ -152,6 +152,9 @@ defmodule Nostrbase.Socket do
          {:ok, conn} <- Mint.WebSocket.stream_request_body(state.conn, state.request_ref, data) do
       {:ok, put_in(state.conn, conn)}
     else
+      {:error, %Mint.WebSocket{} = websocket, %{reason: :closed}} ->
+        {:error, put_in(state.websocket, websocket), :closed}
+
       {:error, %Mint.WebSocket{} = websocket, reason} ->
         {:error, put_in(state.websocket, websocket), reason}
 
