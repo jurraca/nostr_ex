@@ -89,7 +89,7 @@ defmodule Nostrbase.Client do
   end
 
   def subscribe(relay_name, sub_id, payload) when is_atom(sub_id) do
-    with {:ok, _pid} <- Registry.register(Nostrbase.PubSub, sub_id, []),
+    with {:ok, _pid} <- Registry.register(Nostrbase.PubSub, sub_id, nil),
          :ok <- send_event(relay_name, payload),
          :ok <- Nostrbase.RelayAgent.update(relay_name, sub_id) do
       {:ok, sub_id}

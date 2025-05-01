@@ -45,14 +45,20 @@ defmodule Nostrbase.Socket do
 
   @impl GenServer
   def init(uri) do
-    name = uri.host |> String.replace(".", "_") |> String.to_atom()
-    {:ok, %__MODULE__{uri: uri, name: name}}
+    {:ok, %__MODULE__{uri: uri}}
   end
 
   @impl GenServer
   def handle_call({:send_text, text}, _from, state) do
-    {:ok, state} = send_frame(state, {:text, text})
-    {:reply, :ok, state}
+    case send_frame(state, {:text, text}) do
+      {:ok, state} -> {:reply, :ok, state}
+      {:error, :closed} ->
+        Logger.error("Connection is closed")
+        {:reply, :error, state}
+      {:error, state, reason} ->
+        Logger.error("reason: #{reason}")
+        {:reply, :error, state}
+    end
   end
 
   @impl GenServer
