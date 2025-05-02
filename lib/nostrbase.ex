@@ -44,6 +44,10 @@ defmodule Nostrbase do
     send_subscription([authors: [pubkey], kinds: [3]], opts)
   end
 
+  def subscribe_profile(pubkey, opts \\ []) do
+    send_subscription([authors: [pubkey], kinds: [0]], opts)
+  end
+
   def close_all_subs do
     for {pid, subs} <- RelayAgent.state() do
       Enum.map(subs, &Client.close_sub(pid, &1))

@@ -181,10 +181,10 @@ defmodule Nostrbase.Socket do
         %{state | closing?: true}
 
       {:text, text}, state ->
-        Logger.debug("Received: #{inspect(text)}")
 
         text
         |> Message.parse()
+        |> IO.inspect()
         |> handle_message(state)
 
         state
@@ -197,13 +197,7 @@ defmodule Nostrbase.Socket do
 
   defp handle_message({:event, subscription_id, event}, state) do
     Logger.info("received event for sub_id #{subscription_id}")
-
-    if Event.parse(event) do
-      registry_dispatch(subscription_id, event)
-    else
-      Logger.info("invalid event received with id: #{event.id}")
-    end
-
+    registry_dispatch(subscription_id, event)
     {:ok, state}
   end
 
