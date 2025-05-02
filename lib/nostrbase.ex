@@ -44,6 +44,9 @@ defmodule Nostrbase do
     send_subscription([authors: [pubkey], kinds: [3]], opts)
   end
 
+  @doc """
+    Get a pubkey's profile data.
+  """
   def subscribe_profile(pubkey, opts \\ []) do
     send_subscription([authors: [pubkey], kinds: [0]], opts)
   end
