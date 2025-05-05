@@ -19,10 +19,27 @@ defmodule Nostrbase.RelayManager do
   end
 
   def connect(relay_url) do
-    with {:ok, pid} <- DynamicSupervisor.start_child(@name, {Socket, %{url: relay_url}}),
-         {:ok, _} <- Socket.connect(pid) do
-      {:ok, pid}
+    with {:ok, uri} <- parse_url(relay_url),
+         relay_name = name_from_host(uri.host) do
+      case DynamicSupervisor.start_child(@name, {Socket, %{uri: uri, name: relay_name}}) do
+        {:ok, pid} -> connect_to_relay(pid)
+        {:error, {:already_started, _pid}} -> {:error, "already connected"}
+        {:error, reason} -> {:error, reason}
+      end
     end
+  end
+
+  defp connect_to_relay(pid) do
+    case Socket.connect(pid) do
+      :ok -> {:ok, pid}
+      {:error, reason} ->
+        disconnect(pid)
+        {:error, reason}
+    end
+  end
+
+  def disconnect(pid) do
+    DynamicSupervisor.terminate_child(@name, pid)
   end
 
   def relays() do
@@ -36,9 +53,7 @@ defmodule Nostrbase.RelayManager do
   end
 
   def active_names() do
-    @name
-    |> DynamicSupervisor.which_children()
-    |> Enum.map(&get_pid/1)
+    active_pids()
     |> Enum.map(fn pid ->
       Registry.keys(Nostrbase.RelayRegistry, pid) |> List.first()
     end)
@@ -67,7 +82,29 @@ defmodule Nostrbase.RelayManager do
     end)
   end
 
+  defp parse_url("http" <> _rest = url) do
+    reason = "The relay URL must be a websocket, not an HTTP URL, got: #{url}"
+    {:error, reason}
+  end
+
+  defp parse_url(url) do
+    uri = URI.parse(url) |> Map.update!(:path, &(&1 || "/"))
+
+    if uri.scheme in ["ws", "wss"] and uri.host do
+      {:ok, uri}
+    else
+      {:error, "Invalid URL #{url} with host #{uri.host || "empty"}"}
+    end
+  end
+
+  def name_from_host(host) do
+    host
+    |> String.replace(".", "_")
+    |> String.to_atom()
+  end
+
   defp get_pid({:undefined, pid, :worker, [Socket]}), do: pid
+  defp get_pid(_), do: nil
 
   defp get_subs(pid), do: RelayAgent.get(pid)
 end

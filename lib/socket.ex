@@ -4,7 +4,7 @@ defmodule Nostrbase.Socket do
   require Logger
   require Mint.HTTP
 
-  alias Nostrbase.RelayAgent
+  alias Nostrbase.{RelayAgent, RelayRegistry}
   alias Nostr.{Event, Message}
 
   defstruct [
@@ -19,23 +19,18 @@ defmodule Nostrbase.Socket do
     :name
   ]
 
-  def start_link(%{url: url}) do
-    case parse_url(url) do
-      {:ok, uri} ->
-        name = uri.host |> String.replace(".", "_") |> String.to_atom()
-
-        GenServer.start_link(__MODULE__, uri,
-          name: {:via, Registry, {Nostrbase.RelayRegistry, name}}
-        )
-
-      {:error, reason} ->
-        {:error, reason}
-    end
+  def start_link(%{uri: uri, name: name}) do
+    GenServer.start_link(__MODULE__, uri,
+      name: {:via, Registry, {RelayRegistry, name}}
+    )
   end
 
   def connect(pid) do
-    with {:ok, :connected} <- GenServer.call(pid, :connect) do
-      {:ok, pid}
+    try do
+      GenServer.call(pid, :connect, 3_000)
+    catch
+      :exit, {:timeout, _} -> {:error, "connection timed out. Is your URL correct?"}
+      err -> err
     end
   end
 
@@ -46,19 +41,6 @@ defmodule Nostrbase.Socket do
   @impl GenServer
   def init(uri) do
     {:ok, %__MODULE__{uri: uri}}
-  end
-
-  @impl GenServer
-  def handle_call({:send_text, text}, _from, state) do
-    case send_frame(state, {:text, text}) do
-      {:ok, state} -> {:reply, :ok, state}
-      {:error, :closed} ->
-        Logger.error("Connection is closed")
-        {:reply, :error, state}
-      {:error, state, reason} ->
-        Logger.error("reason: #{reason}")
-        {:reply, :error, state}
-    end
   end
 
   @impl GenServer
@@ -78,14 +60,27 @@ defmodule Nostrbase.Socket do
     with {:ok, conn} <- Mint.HTTP.connect(http_scheme, uri.host, uri.port, protocols: [:http1]),
          {:ok, conn, ref} <- Mint.WebSocket.upgrade(ws_scheme, conn, uri.path, []) do
       state = %{state | conn: conn, request_ref: ref, caller: from}
-      {:noreply, state}
+      {:reply, :ok, state}
     else
       {:error, reason} ->
         Logger.error(reason)
-        {:stop, :normal, state}
+        {:stop, :normal, {:error, "something went wrong"}, state}
 
       {:error, conn, reason} ->
         {:stop, {:error, reason}, put_in(state.conn, conn)}
+    end
+  end
+
+  @impl GenServer
+  def handle_call({:send_text, text}, _from, state) do
+    case send_frame(state, {:text, text}) do
+      {:ok, state} -> {:reply, :ok, state}
+      {:error, :closed} ->
+        Logger.error("Connection is closed")
+        {:reply, :error, state}
+      {:error, state, reason} ->
+        Logger.error("reason: #{reason}")
+        {:reply, :error, state}
     end
   end
 
@@ -241,7 +236,6 @@ defmodule Nostrbase.Socket do
   def terminate({:remote, :closed}, state) do
     Logger.info("Remote closed the connection - #{state.uri.host}")
     RelayAgent.delete_relay(state.name)
-    {:stop, :closed, state}
   end
 
   @impl GenServer
@@ -276,18 +270,4 @@ defmodule Nostrbase.Socket do
     end)
   end
 
-  defp parse_url("http" <> _rest = url) do
-    reason = "The relay URL must be a websocket, not an HTTP URL, got: #{url}"
-    {:error, reason}
-  end
-
-  defp parse_url(url) do
-    uri = URI.parse(url) |> Map.update!(:path, &(&1 || "/"))
-
-    if uri.host do
-      {:ok, uri}
-    else
-      {:error, "Invalid host for URL #{url}, got: #{uri.host || "empty"} "}
-    end
-  end
 end
