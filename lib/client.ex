@@ -29,6 +29,7 @@ defmodule Nostrbase.Client do
 
   def close_sub(relay_name, sub_id) do
     request = Message.close(sub_id) |> Message.serialize()
+
     case send_event(relay_name, request) do
       {:ok, _} -> RelayAgent.delete_subscription(relay_name, sub_id)
       err -> err
@@ -76,6 +77,7 @@ defmodule Nostrbase.Client do
 
   defp do_create_sub(filters) when is_list(filters) do
     sub_id = :crypto.strong_rand_bytes(32) |> Base.encode16(case: :lower)
+
     msg =
       filters
       |> Message.request(sub_id)

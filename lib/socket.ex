@@ -190,7 +190,6 @@ defmodule Nostrbase.Socket do
         %{state | closing?: true}
 
       {:text, text}, state ->
-
         text
         |> Message.parse()
         |> IO.inspect()
@@ -283,5 +282,4 @@ defmodule Nostrbase.Socket do
       for {pid, _} <- entries, do: send(pid, message)
     end)
   end
-
 end

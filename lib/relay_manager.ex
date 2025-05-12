@@ -5,7 +5,7 @@ defmodule Nostrbase.RelayManager do
   """
 
   use DynamicSupervisor
-  alias Nostrbase.{RelayAgent, Socket}
+  alias Nostrbase.{RelayAgent, RelayRegistry, Socket}
 
   @name RelaySupervisor
 
@@ -31,15 +31,24 @@ defmodule Nostrbase.RelayManager do
 
   defp connect_to_relay(pid) do
     case Socket.connect(pid) do
-      :ok -> {:ok, pid}
+      :ok ->
+        {:ok, pid}
+
       {:error, reason} ->
         disconnect(pid)
         {:error, reason}
     end
   end
 
-  def disconnect(pid) do
+  def disconnect(pid) when is_pid(pid) do
     DynamicSupervisor.terminate_child(@name, pid)
+  end
+
+  def disconnect(relay) when is_binary(relay) do
+    case Registry.lookup(RelayRegistry, relay) do
+      [{pid, nil}] -> disconnect(pid)
+      _ -> {:error, :not_found}
+    end
   end
 
   def relays() do
