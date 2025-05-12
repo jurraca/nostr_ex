@@ -63,12 +63,12 @@ defmodule Nostrbase.Client do
       Keyword.keyword?(opts) ->
         filter = Map.merge(%Filter{}, Enum.into(opts, %{}))
         do_create_sub([filter])
-        
+
       # Multiple filters as list of keyword lists
       Enum.all?(opts, &Keyword.keyword?/1) ->
         filters = Enum.map(opts, &Map.merge(%Filter{}, Enum.into(&1, %{})))
         do_create_sub(filters)
-        
+
       true ->
         {:error, "Invalid filter format"}
     end
@@ -76,7 +76,7 @@ defmodule Nostrbase.Client do
 
   defp do_create_sub(filters) when is_list(filters) do
     sub_id = :crypto.strong_rand_bytes(32) |> Base.encode16(case: :lower)
-    msg = 
+    msg =
       filters
       |> Message.request(sub_id)
       |> Message.serialize()
@@ -126,7 +126,7 @@ defmodule Nostrbase.Client do
   end
 
   defp get_relays(nil), do: get_relays(:all)
-  defp get_relays(:all), do: {:ok, RelayManager.active_names()}
+  defp get_relays(:all), do: {:ok, RelayManager.get_states()}
 
   defp get_relays([_h | _t] = relay_list) do
     case Enum.all?(relay_list, &is_atom(&1)) do

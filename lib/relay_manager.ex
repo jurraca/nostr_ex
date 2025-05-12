@@ -52,12 +52,11 @@ defmodule Nostrbase.RelayManager do
     |> Enum.map(&get_pid/1)
   end
 
-  def active_names() do
+  def get_states() do
     active_pids()
     |> Enum.map(fn pid ->
-      Registry.keys(Nostrbase.RelayRegistry, pid) |> List.first()
+      Socket.get_status(pid)
     end)
-    |> Enum.reject(&is_nil/1)
   end
 
   def get_active_subscriptions() do

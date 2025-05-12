@@ -15,14 +15,11 @@ defmodule Nostrbase.Socket do
     :caller,
     :status,
     :resp_headers,
-    :closing?,
-    :name
+    :closing?
   ]
 
   def start_link(%{uri: uri, name: name}) do
-    GenServer.start_link(__MODULE__, uri,
-      name: {:via, Registry, {RelayRegistry, name}}
-    )
+    GenServer.start_link(__MODULE__, uri, name: {:via, Registry, {RelayRegistry, name}})
   end
 
   def connect(pid) do
@@ -36,6 +33,10 @@ defmodule Nostrbase.Socket do
 
   def send_message(pid, text) do
     GenServer.call(pid, {:send_text, text})
+  end
+
+  def get_status(pid) do
+    GenServer.call(pid, :status)
   end
 
   @impl GenServer
@@ -74,14 +75,27 @@ defmodule Nostrbase.Socket do
   @impl GenServer
   def handle_call({:send_text, text}, _from, state) do
     case send_frame(state, {:text, text}) do
-      {:ok, state} -> {:reply, :ok, state}
+      {:ok, state} ->
+        {:reply, :ok, state}
+
       {:error, :closed} ->
         Logger.error("Connection is closed")
         {:reply, :error, state}
+
       {:error, state, reason} ->
         Logger.error("reason: #{reason}")
         {:reply, :error, state}
     end
+  end
+
+  @impl GenServer
+  def handle_call(:status, _from, state) do
+    view_data = %{
+      url: URI.to_string(state.uri),
+      connected?: !state.closing?
+    }
+
+    {:reply, view_data, state}
   end
 
   @impl GenServer
