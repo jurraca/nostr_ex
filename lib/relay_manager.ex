@@ -90,6 +90,10 @@ defmodule Nostrbase.RelayManager do
     end)
   end
 
+  def registered_names() do
+    Registry.select(Nostrbase.RelayRegistry, [{{:"$1", :_, :_}, [], [:"$1"]}]) |> Enum.sort()
+  end
+
   defp parse_url("http" <> _rest = url) do
     reason = "The relay URL must be a websocket, not an HTTP URL, got: #{url}"
     {:error, reason}

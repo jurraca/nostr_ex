@@ -128,13 +128,15 @@ defmodule Nostrbase.Client do
   end
 
   defp get_relays(nil), do: get_relays(:all)
-  defp get_relays(:all), do: {:ok, RelayManager.get_states()}
+  defp get_relays(:all), do: RelayManager.registered_names()
 
   defp get_relays([_h | _t] = relay_list) do
-    case Enum.all?(relay_list, &is_atom(&1)) do
-      false -> {:error, "One or more relay names provided were invalid."}
-      true -> {:ok, relay_list}
-    end
+    Enum.map(relay_list, fn relay ->
+      case URI.parse(relay) do
+         %{host: host} -> RelayManager.name_from_host(host)
+         _ -> relay
+      end
+    end)
   end
 
   defp get_relays(relay_list), do: {:error, "invalid relay list provided, got: #{relay_list}"}

@@ -15,11 +15,13 @@ defmodule Nostrbase.Socket do
     :caller,
     :status,
     :resp_headers,
-    :closing?
+    :closing?,
+    :ready?,
+    :name
   ]
 
   def start_link(%{uri: uri, name: name}) do
-    GenServer.start_link(__MODULE__, uri, name: {:via, Registry, {RelayRegistry, name}})
+    GenServer.start_link(__MODULE__, {uri, name}, name: {:via, Registry, {RelayRegistry, name}})
   end
 
   def connect(pid) do
@@ -40,8 +42,8 @@ defmodule Nostrbase.Socket do
   end
 
   @impl GenServer
-  def init(uri) do
-    {:ok, %__MODULE__{uri: uri}}
+  def init({uri, name}) do
+    {:ok, %__MODULE__{uri: uri, name: name}}
   end
 
   @impl GenServer
@@ -60,7 +62,7 @@ defmodule Nostrbase.Socket do
 
     with {:ok, conn} <- Mint.HTTP.connect(http_scheme, uri.host, uri.port, protocols: [:http1]),
          {:ok, conn, ref} <- Mint.WebSocket.upgrade(ws_scheme, conn, uri.path, []) do
-      state = %{state | conn: conn, request_ref: ref, caller: from}
+      state = %{state | conn: conn, request_ref: ref, caller: from, ready?: false}
       {:reply, :ok, state}
     else
       {:error, reason} ->
@@ -90,12 +92,13 @@ defmodule Nostrbase.Socket do
 
   @impl GenServer
   def handle_call(:status, _from, state) do
-    view_data = %{
+    status_data = %{
       url: URI.to_string(state.uri),
-      connected?: !state.closing?
+      closing?: state.closing?,
+      ready?: state.ready?
     }
 
-    {:reply, view_data, state}
+    {:reply, status_data, state}
   end
 
   @impl GenServer
@@ -146,6 +149,7 @@ defmodule Nostrbase.Socket do
     case Mint.WebSocket.decode(websocket, data) do
       {:ok, websocket, frames} ->
         put_in(state.websocket, websocket)
+        |> put_in(state.ready?, true)
         |> handle_frames(frames)
         |> handle_responses(rest)
 
