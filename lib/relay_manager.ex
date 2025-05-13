@@ -40,20 +40,31 @@ defmodule Nostrbase.RelayManager do
     end
   end
 
+  def ready?(pid) when is_pid(pid), do: Socket.get_status(pid) |> Map.take([:ready?])
+
+  def ready?(relay_name) do
+    case lookup(relay_name) do
+      {:ok, pid} -> ready?(pid)
+      err -> err
+    end
+  end
+
   def disconnect(pid) when is_pid(pid) do
     DynamicSupervisor.terminate_child(@name, pid)
   end
 
-  def disconnect(relay) when is_binary(relay) do
-    case Registry.lookup(RelayRegistry, relay) do
-      [{pid, nil}] -> disconnect(pid)
-      _ -> {:error, :not_found}
+  def disconnect(relay_name) when is_binary(relay_name) do
+    String.to_atom(relay_name) |> disconnect()
+  end
+
+  def disconnect(relay_name) when is_atom(relay_name) do
+    case lookup(relay_name) do
+      {:ok, pid} -> disconnect(pid)
+      err -> err
     end
   end
 
-  def relays() do
-    DynamicSupervisor.which_children(@name)
-  end
+  def relays(), do: DynamicSupervisor.which_children(@name)
 
   def active_pids() do
     @name
@@ -91,7 +102,20 @@ defmodule Nostrbase.RelayManager do
   end
 
   def registered_names() do
-    Registry.select(Nostrbase.RelayRegistry, [{{:"$1", :_, :_}, [], [:"$1"]}]) |> Enum.sort()
+    Registry.select(RelayRegistry, [{{:"$1", :_, :_}, [], [:"$1"]}]) |> Enum.sort()
+  end
+
+  def lookup(name) do
+    case Registry.lookup(RelayRegistry, name) do
+      [{pid, _}] -> {:ok, pid}
+      _ -> {:error, :not_found}
+    end
+  end
+
+  def name_from_host(host) do
+    host
+    |> String.replace(".", "_")
+    |> String.to_atom()
   end
 
   defp parse_url("http" <> _rest = url) do
@@ -107,12 +131,6 @@ defmodule Nostrbase.RelayManager do
     else
       {:error, "Invalid URL #{url} with host #{uri.host || "empty"}"}
     end
-  end
-
-  def name_from_host(host) do
-    host
-    |> String.replace(".", "_")
-    |> String.to_atom()
   end
 
   defp get_pid({:undefined, pid, :worker, [Socket]}), do: pid
