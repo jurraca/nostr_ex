@@ -99,7 +99,7 @@ defmodule Nostrbase.Client do
   end
 
   defp do_event_send(privkey, arg, create_fun, opts) do
-    with {:ok, relay_names} <- get_relays(opts[:send_via]),
+    with relay_names = get_relays(opts[:send_via]),
          json_event <- create_fun.(arg, privkey) do
       results = Enum.map(relay_names, &send_event(&1, json_event))
 
@@ -114,13 +114,16 @@ defmodule Nostrbase.Client do
   end
 
   defp do_subscribe_send(filter, opts) do
-    with {:ok, relay_names} <- get_relays(opts[:send_via]),
+    with relay_names = get_relays(opts[:send_via]),
          {:ok, sub_id, message} <- create_sub(filter) do
       results = Enum.map(relay_names, &subscribe(&1, sub_id, message))
 
       case Enum.all?(results, &match?({:ok, _}, &1)) do
         true -> {:ok, sub_id}
-        false -> {:error, Enum.filter(results, &match?({:error, _}, &1))}
+        false -> {:error, Enum.reduce(results, [],
+            fn {:error, reason}, acc ->  acc ++ [reason]
+               {:ok, _}, acc -> acc end)
+            }
       end
     else
       {:error, reason} -> {:error, reason}
