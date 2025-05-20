@@ -33,8 +33,14 @@ defmodule Nostrbase.Socket do
     end
   end
 
-  def send_message(pid, text) do
+  def send_message(pid, text) when is_pid(pid) do
     GenServer.call(pid, {:send_text, text})
+  end
+
+  def send_message(relay_name, text) when is_binary(relay_name) do
+    with {:ok, pid} <- Nostrbase.RelayManager.lookup(relay_name) do
+      send_message(pid, text)
+    end
   end
 
   def get_status(pid) do
@@ -75,7 +81,7 @@ defmodule Nostrbase.Socket do
   end
 
   @impl GenServer
-  def handle_call({:send_text, text}, _from, state) do
+  def handle_call({:send_text, text}, _from, %{ready?: true} = state) do
     case send_frame(state, {:text, text}) do
       {:ok, state} ->
         {:reply, :ok, state}
@@ -88,6 +94,11 @@ defmodule Nostrbase.Socket do
         Logger.error("reason: #{reason}")
         {:reply, :error, state}
     end
+  end
+
+  @impl GenServer
+  def handle_call({:send_text, _text}, _from, %{ready?: false} = state) do
+    {:reply, {:error, "socket not ready to send messages yet, retry soon"}, state}
   end
 
   @impl GenServer
@@ -132,7 +143,7 @@ defmodule Nostrbase.Socket do
   defp handle_responses(%{request_ref: ref} = state, [{:done, ref} | rest]) do
     case Mint.WebSocket.new(state.conn, ref, state.status, state.resp_headers) do
       {:ok, conn, websocket} ->
-        %{state | conn: conn, websocket: websocket, status: nil, resp_headers: nil}
+        %{state | conn: conn, websocket: websocket, status: nil, resp_headers: nil, ready?: true}
         |> reply({:ok, :connected})
         |> handle_responses(rest)
 
@@ -149,7 +160,6 @@ defmodule Nostrbase.Socket do
     case Mint.WebSocket.decode(websocket, data) do
       {:ok, websocket, frames} ->
         put_in(state.websocket, websocket)
-        |> put_in(state.ready?, true)
         |> handle_frames(frames)
         |> handle_responses(rest)
 

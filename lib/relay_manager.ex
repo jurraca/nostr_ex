@@ -18,6 +18,16 @@ defmodule Nostrbase.RelayManager do
     DynamicSupervisor.init(opts)
   end
 
+  @doc"""
+  Connect to the relay with `relay_url`.
+  Starts a child of the `RelayManager` supervisor as a `Socket`.
+  It will return `{:error, "already connected"}` if a relay with that `relay_url` is already connected.
+
+  The `connect_to_relay/2` function called after successful `Socket.init` is asynchronous, and will block the caller until it completes. The handshake to set up the conn may take several seconds, and times out after 3 seconds by default.
+  It is therefore recommendeded to run this function in a `Task` and `Task.await` it,
+  in particular when connecting to multiple relays.
+  Note that the return value is not necessarily needed, since you can call `Socket.get_status/1` to see if the connection is ready to send or receive messages.
+  """
   def connect(relay_url) do
     with {:ok, uri} <- parse_url(relay_url),
          relay_name = name_from_host(uri.host) do
@@ -29,10 +39,10 @@ defmodule Nostrbase.RelayManager do
     end
   end
 
-  defp connect_to_relay(pid) do
+  defp connect_to_relay(pid, timeout \\ 3_000) do
     case Socket.connect(pid) do
       :ok ->
-        {:ok, pid}
+        wait_for_ready(pid, 500, timeout)
 
       {:error, reason} ->
         disconnect(pid)
@@ -40,7 +50,20 @@ defmodule Nostrbase.RelayManager do
     end
   end
 
-  def ready?(pid) when is_pid(pid), do: Socket.get_status(pid) |> Map.take([:ready?])
+  def wait_for_ready(pid, interval, timeout, elapsed_time \\ 0) do
+    if elapsed_time >= timeout do
+      {:error, :not_ready}
+    else
+      if ready?(pid) do
+        {:ok, pid}
+      else
+        Process.sleep(interval)
+        wait_for_ready(pid, interval, timeout, elapsed_time + interval)
+      end
+    end
+  end
+
+  def ready?(pid) when is_pid(pid), do: Socket.get_status(pid) |> Map.get(:ready?)
 
   def ready?(relay_name) do
     case lookup(relay_name) do
