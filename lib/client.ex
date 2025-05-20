@@ -15,13 +15,23 @@ defmodule Nostrbase.Client do
   end
 
   def send_event(relay_name, payload) when is_binary(payload) do
-    case Registry.lookup(Nostrbase.RelayRegistry, relay_name) do
-      [{pid, _}] -> Socket.send_message(pid, payload)
-      _ -> {:error, :not_found}
-    end
+    Socket.send_message(relay_name, payload)
   end
 
-  def send_sub(filter, opts \\ []), do: do_subscribe_send(filter, opts)
+  def send_sub(filter, opts \\ []) do
+    with {:ok, sub_id, message} <- create_sub(filter),
+         {:ok, _pid} <- Registry.register(Nostrbase.PubSub, sub_id, nil) do
+      opts[:send_via]
+      |> get_relays()
+      |> Enum.each(fn relay_name ->
+        subscribe(relay_name, sub_id, message)
+      end)
+
+      {:ok, sub_id}
+    else
+      {:error, reason} -> {:error, reason}
+    end
+  end
 
   def close_sub(relay_name, sub_id) when is_binary(sub_id) do
     close_sub(relay_name, String.to_existing_atom(sub_id))
@@ -67,23 +77,13 @@ defmodule Nostrbase.Client do
 
       # Multiple filters as list of keyword lists
       Enum.all?(opts, &Keyword.keyword?/1) ->
-        filters = Enum.map(opts, &Map.merge(%Filter{}, Enum.into(&1, %{})))
-        do_create_sub(filters)
+        opts
+        |> Enum.map(&Map.merge(%Filter{}, Enum.into(&1, %{})))
+        |> do_create_sub()
 
       true ->
         {:error, "Invalid filter format"}
     end
-  end
-
-  defp do_create_sub(filters) when is_list(filters) do
-    sub_id = :crypto.strong_rand_bytes(32) |> Base.encode16(case: :lower)
-
-    msg =
-      filters
-      |> Message.request(sub_id)
-      |> Message.serialize()
-
-    {:ok, sub_id, msg}
   end
 
   def subscribe(relay_name, sub_id, payload) when is_binary(sub_id) do
@@ -91,12 +91,15 @@ defmodule Nostrbase.Client do
   end
 
   def subscribe(relay_name, sub_id, payload) when is_atom(sub_id) do
-    with {:ok, _pid} <- Registry.register(Nostrbase.PubSub, sub_id, nil),
-         :ok <- send_event(relay_name, payload),
-         :ok <- Nostrbase.RelayAgent.update(relay_name, sub_id) do
-      {:ok, sub_id}
+    with :ok <- send_event(relay_name, payload),
+         :ok <- RelayAgent.update(relay_name, sub_id) do
+      :ok
+    else
+      _ -> Logger.error("Error sending subscription #{sub_id}")
     end
   end
+
+  def subscribe(_, sub_id, _), do: {:error, "invalid sub_id format, got #{sub_id}"}
 
   defp do_event_send(privkey, arg, create_fun, opts) do
     with relay_names = get_relays(opts[:send_via]),
@@ -113,21 +116,15 @@ defmodule Nostrbase.Client do
     end
   end
 
-  defp do_subscribe_send(filter, opts) do
-    with relay_names = get_relays(opts[:send_via]),
-         {:ok, sub_id, message} <- create_sub(filter) do
-      results = Enum.map(relay_names, &subscribe(&1, sub_id, message))
+  defp do_create_sub(filters) when is_list(filters) do
+    sub_id = :crypto.strong_rand_bytes(32) |> Base.encode16(case: :lower)
 
-      case Enum.all?(results, &match?({:ok, _}, &1)) do
-        true -> {:ok, sub_id}
-        false -> {:error, Enum.reduce(results, [],
-            fn {:error, reason}, acc ->  acc ++ [reason]
-               {:ok, _}, acc -> acc end)
-            }
-      end
-    else
-      {:error, reason} -> {:error, reason}
-    end
+    msg =
+      filters
+      |> Message.request(sub_id)
+      |> Message.serialize()
+
+    {:ok, sub_id, msg}
   end
 
   defp get_relays(nil), do: get_relays(:all)
