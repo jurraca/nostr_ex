@@ -4,7 +4,7 @@ defmodule Nostrbase.Socket do
   require Logger
   require Mint.HTTP
 
-  alias Nostrbase.{RelayAgent, RelayRegistry}
+  alias Nostrbase.{RelayAgent, RelayManager, RelayRegistry}
   alias Nostr.{Event, Message}
 
   defstruct [
@@ -38,7 +38,7 @@ defmodule Nostrbase.Socket do
   end
 
   def send_message(relay_name, text) when is_binary(relay_name) do
-    with {:ok, pid} <- Nostrbase.RelayManager.lookup(relay_name) do
+    with {:ok, pid} <- RelayManager.lookup(relay_name) do
       send_message(pid, text)
     end
   end

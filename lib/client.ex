@@ -133,8 +133,8 @@ defmodule Nostrbase.Client do
   defp get_relays([_h | _t] = relay_list) do
     Enum.map(relay_list, fn relay ->
       case URI.parse(relay) do
-         %{host: host} -> RelayManager.name_from_host(host)
-         _ -> relay
+        %{host: host} -> RelayManager.name_from_host(host)
+        _ -> relay
       end
     end)
   end

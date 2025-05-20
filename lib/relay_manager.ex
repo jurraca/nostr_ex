@@ -96,10 +96,7 @@ defmodule Nostrbase.RelayManager do
   end
 
   def get_states() do
-    active_pids()
-    |> Enum.map(fn pid ->
-      Socket.get_status(pid)
-    end)
+    active_pids() |> Enum.map(fn pid -> Socket.get_status(pid) end)
   end
 
   def get_active_subscriptions() do

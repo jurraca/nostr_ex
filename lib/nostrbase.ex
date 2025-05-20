@@ -9,7 +9,6 @@ defmodule Nostrbase do
   Connect to a relay via its URL.
   """
   def add_relay(relay_url) do
-    # relay_url in RelayManager.relays() ?
     case RelayManager.connect(relay_url) do
       {:ok, _pid} = res -> res
       {:error, _} = err -> err
