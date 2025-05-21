@@ -295,10 +295,6 @@ defmodule Nostrbase.Socket do
   Send a message to a given pubsub topic
   """
   def registry_dispatch(sub_id, message) when is_binary(sub_id) do
-    sub_id |> String.to_existing_atom() |> registry_dispatch(message)
-  end
-
-  def registry_dispatch(sub_id, message) when is_atom(sub_id) do
     Registry.dispatch(Nostrbase.PubSub, sub_id, fn entries ->
       for {pid, _} <- entries, do: send(pid, message)
     end)

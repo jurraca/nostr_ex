@@ -87,15 +87,9 @@ defmodule Nostrbase.Client do
   end
 
   def subscribe(relay_name, sub_id, payload) when is_binary(sub_id) do
-    subscribe(relay_name, String.to_atom(sub_id), payload)
-  end
-
-  def subscribe(relay_name, sub_id, payload) when is_atom(sub_id) do
     with :ok <- send_event(relay_name, payload),
          :ok <- RelayAgent.update(relay_name, sub_id) do
       :ok
-    else
-      _ -> Logger.error("Error sending subscription #{sub_id}")
     end
   end
 
