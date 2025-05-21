@@ -37,10 +37,14 @@ defmodule Nostrbase.Socket do
     GenServer.call(pid, {:send_text, text})
   end
 
-  def send_message(relay_name, text) when is_binary(relay_name) do
+  def send_message(relay_name, text) when is_atom(relay_name) do
     with {:ok, pid} <- RelayManager.lookup(relay_name) do
       send_message(pid, text)
     end
+  end
+
+  def send_message(relay_name, _text) do
+    {:error, "invalid relay_name format, got #{relay_name}"}
   end
 
   def get_status(pid) do
@@ -217,7 +221,7 @@ defmodule Nostrbase.Socket do
     end)
   end
 
-  defp handle_message({:event, subscription_id, event}, state) do
+  defp handle_message({:event, subscription_id, _} = event, state) do
     Logger.info("received event for sub_id #{subscription_id}")
     registry_dispatch(subscription_id, event)
     {:ok, state}
