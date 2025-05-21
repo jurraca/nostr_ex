@@ -92,10 +92,13 @@ defmodule Nostrbase.Socket do
 
       {:error, :closed} ->
         Logger.error("Connection is closed")
-        {:reply, :error, state}
+        {:reply, :error, %{state | closing?: true, ready: false}}
+
+      {:error, %Mint.TransportError{reason: :closed}} ->
+        Logger.error("Connection is closed")
+        {:reply, :error, %{state | closing?: true, ready: false}}
 
       {:error, state, reason} ->
-        Logger.error("reason: #{reason}")
         {:reply, :error, state}
     end
   end
