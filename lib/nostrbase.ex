@@ -32,14 +32,14 @@ defmodule Nostrbase do
   @doc """
     Subscribe to a pubkey's notes, i.e. "follow" a pubkey.
   """
-  def subscribe_pubkey(pubkey, opts \\ []) do
+  def subscribe_notes(pubkey, opts \\ []) do
     send_subscription([authors: [pubkey], kinds: [1]], opts)
   end
 
   @doc """
     Get a pubkey's contact list.
   """
-  def subscribe_contacts(pubkey, opts \\ []) do
+  def subscribe_follows(pubkey, opts \\ []) do
     send_subscription([authors: [pubkey], kinds: [3]], opts)
   end
 
