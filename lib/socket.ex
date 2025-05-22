@@ -251,8 +251,15 @@ defmodule Nostrbase.Socket do
   end
 
   defp handle_message({:ok, event_id, success, message}, state) do
-    Logger.info("OK event #{event_id} from #{state.uri.host}, success? #{success}")
-    registry_dispatch(:ok, message)
+    status = if success, do: "accepted", else: "rejected"
+    reason = if message == "", do: "no reason given", else: message
+    Logger.info("OK event #{event_id} from #{state.uri.host} #{status}: #{reason}")
+    
+    registry_dispatch(:ok, %{
+      event_id: event_id,
+      success: success,
+      message: message
+    })
     {:ok, state}
   end
 
