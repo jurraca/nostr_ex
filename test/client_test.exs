@@ -1,4 +1,3 @@
-
 defmodule Nostrbase.ClientTest do
   use ExUnit.Case
   alias Nostrbase.Client
@@ -27,7 +26,8 @@ defmodule Nostrbase.ClientTest do
       {:ok, sub_id, message} = Client.create_sub(filter)
 
       assert ["REQ", ^sub_id, %{"authors" => ["abc123"], "kinds" => [1]}] = JSON.decode!(message)
-      assert String.length(sub_id) == 64 # 32 bytes hex encoded
+      # 32 bytes hex encoded
+      assert String.length(sub_id) == 64
     end
 
     test "handles multiple filters" do
@@ -35,9 +35,15 @@ defmodule Nostrbase.ClientTest do
         [authors: ["abc123"], kinds: [1]],
         [authors: ["def456"], kinds: [2]]
       ]
+
       {:ok, sub_id, message} = Client.create_sub(filters)
 
-      assert ["REQ", ^sub_id, %{"authors" => ["abc123"], "kinds" => [1]}, %{"authors" => ["def456"], "kinds" => [2]} ] = JSON.decode!(message)
+      assert [
+               "REQ",
+               ^sub_id,
+               %{"authors" => ["abc123"], "kinds" => [1]},
+               %{"authors" => ["def456"], "kinds" => [2]}
+             ] = JSON.decode!(message)
     end
   end
 end

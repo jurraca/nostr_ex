@@ -1,4 +1,10 @@
 defmodule Nostrbase.Socket do
+  @moduledoc """
+  A GenServer implementing a websocket connection to a relay. 
+
+  Once it is in `ready?: true` state, messages can be sent via `send_message/2`, with arguments either the `pid` or the `name` registered on `init`, and the encoded Nostr message to send.
+  """
+
   use GenServer, restart: :transient
 
   require Logger
@@ -254,12 +260,13 @@ defmodule Nostrbase.Socket do
     status = if success, do: "accepted", else: "rejected"
     reason = if message == "", do: "no reason given", else: message
     Logger.info("OK event #{event_id} from #{state.uri.host} #{status}: #{reason}")
-    
+
     registry_dispatch(:ok, %{
       event_id: event_id,
       success: success,
       message: message
     })
+
     {:ok, state}
   end
 

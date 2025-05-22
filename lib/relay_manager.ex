@@ -18,7 +18,7 @@ defmodule Nostrbase.RelayManager do
     DynamicSupervisor.init(opts)
   end
 
-  @doc"""
+  @doc """
   Connect to the relay with `relay_url`.
   Starts a child of the `RelayManager` supervisor as a `Socket`.
   It will return `{:error, "already connected"}` if a relay with that `relay_url` is already connected.
