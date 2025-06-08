@@ -1,6 +1,6 @@
 defmodule Nostrbase.Client do
   @moduledoc """
-    Wrap the Websocket Client in `WsClient`.
+    Wrap the Websocket Client in `Socket`.
   """
 
   alias Nostr.{Event, Filter, Message}
@@ -33,16 +33,20 @@ defmodule Nostrbase.Client do
     end
   end
 
-  def close_sub(relay_name, sub_id) when is_binary(sub_id) do
-    close_sub(relay_name, String.to_existing_atom(sub_id))
-  end
-
-  def close_sub(relay_name, sub_id) do
-    request = Message.close(sub_id) |> Message.serialize()
-
-    case send_event(relay_name, request) do
-      {:ok, _} -> RelayAgent.delete_subscription(relay_name, sub_id)
-      err -> err
+  def close_sub(relays, sub_id) do
+    with true <- sub_id in RelayAgent.get_unique_subscriptions(),
+         request = Message.close(sub_id) |> Message.serialize(),
+         relay_names = get_relays(relays) do
+      Enum.map(relay_names, fn relay_name ->
+        case send_event(relay_name, request) do
+          {:ok, _} -> RelayAgent.delete_subscription(relay_name, sub_id)
+          err -> err
+        end
+      end)
+      |> Nostrbase.Utils.collect()
+    else
+      {:error, _} ->
+        {:error, "subscription ID not found: #{sub_id}"}
     end
   end
 
@@ -126,9 +130,10 @@ defmodule Nostrbase.Client do
 
   defp get_relays([_h | _t] = relay_list) do
     Enum.map(relay_list, fn relay ->
-      case URI.parse(relay) do
-        %{host: host} -> RelayManager.name_from_host(host)
-        _ -> relay
+      cond do
+        relay in RelayManager.registered_names() -> relay
+        is_binary(relay) -> relay |> URI.parse() |> Map.get(:host) |> Utils.name_from_host()
+        true -> {:error, "invalid relay name, got #{relay}"}
       end
     end)
   end
