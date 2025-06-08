@@ -4,7 +4,7 @@ defmodule Nostrbase.Client do
   """
 
   alias Nostr.{Event, Filter, Message}
-  alias Nostrbase.{RelayAgent, RelayManager, Socket}
+  alias Nostrbase.{RelayAgent, RelayManager, Socket, Utils}
 
   def send_note(note, privkey, opts \\ []) do
     do_event_send(privkey, note, &create_note/2, opts)

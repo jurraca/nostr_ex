@@ -5,7 +5,7 @@ defmodule Nostrbase.RelayManager do
   """
 
   use DynamicSupervisor
-  alias Nostrbase.{RelayAgent, RelayRegistry, Socket}
+  alias Nostrbase.{RelayRegistry, Socket, Utils}
 
   @name RelaySupervisor
 
@@ -24,13 +24,13 @@ defmodule Nostrbase.RelayManager do
   It will return `{:error, "already connected"}` if a relay with that `relay_url` is already connected.
 
   The `connect_to_relay/2` function called after successful `Socket.init` is asynchronous, and will block the caller until it completes. The handshake to set up the conn may take several seconds, and times out after 3 seconds by default.
-  It is therefore recommendeded to run this function in a `Task` and `Task.await` it,
+  It is therefore recommendeded to run this function in a `Task`,
   in particular when connecting to multiple relays.
   Note that the return value is not necessarily needed, since you can call `Socket.get_status/1` to see if the connection is ready to send or receive messages.
   """
   def connect(relay_url) do
     with {:ok, uri} <- parse_url(relay_url),
-         relay_name = name_from_host(uri.host) do
+         relay_name = Utils.name_from_host(uri.host) do
       case DynamicSupervisor.start_child(@name, {Socket, %{uri: uri, name: relay_name}}) do
         {:ok, pid} -> connect_to_relay(pid)
         {:error, {:already_started, _pid}} -> {:error, "already connected"}
@@ -99,28 +99,6 @@ defmodule Nostrbase.RelayManager do
     active_pids() |> Enum.map(fn pid -> Socket.get_status(pid) end)
   end
 
-  def get_active_subscriptions() do
-    active_pids()
-    |> Enum.map(fn pid -> get_subs(pid) end)
-    |> List.flatten()
-    |> Enum.reject(&is_nil(&1))
-    |> Enum.uniq()
-  end
-
-  def get_active_subscriptions_by_relay() do
-    active_pids() |> Enum.map(fn pid -> {pid, get_subs(pid)} end)
-  end
-
-  def get_relays_by_sub do
-    state = RelayAgent.state()
-
-    Enum.reduce(state, %{}, fn {pid, subs}, acc ->
-      Enum.map(subs, fn sub ->
-        Map.update(acc, sub, [pid], fn existing -> [pid | existing] end)
-      end)
-    end)
-  end
-
   def registered_names() do
     Registry.select(RelayRegistry, [{{:"$1", :_, :_}, [], [:"$1"]}]) |> Enum.sort()
   end
@@ -130,12 +108,6 @@ defmodule Nostrbase.RelayManager do
       [{pid, _}] -> {:ok, pid}
       _ -> {:error, :not_found}
     end
-  end
-
-  def name_from_host(host) do
-    host
-    |> String.replace(".", "_")
-    |> String.to_atom()
   end
 
   defp parse_url("http" <> _rest = url) do
@@ -155,6 +127,4 @@ defmodule Nostrbase.RelayManager do
 
   defp get_pid({:undefined, pid, :worker, [Socket]}), do: pid
   defp get_pid(_), do: nil
-
-  defp get_subs(pid), do: RelayAgent.get(pid)
 end
