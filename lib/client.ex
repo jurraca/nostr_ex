@@ -33,7 +33,11 @@ defmodule Nostrbase.Client do
     end
   end
 
-  def close_sub(relays, sub_id) do
+  def close_sub(relay, sub_id) when is_binary(relay) do
+    close_sub([relay], sub_id)
+  end
+
+  def close_sub(relays, sub_id) when is_list(relays) do
     with true <- sub_id in RelayAgent.get_unique_subscriptions(),
          request = Message.close(sub_id) |> Message.serialize(),
          relay_names = get_relays(relays) do
