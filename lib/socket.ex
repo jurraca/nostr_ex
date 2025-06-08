@@ -1,6 +1,6 @@
 defmodule Nostrbase.Socket do
   @moduledoc """
-  A GenServer implementing a websocket connection to a relay. 
+  A GenServer implementing a websocket connection to a relay.
 
   Once it is in `ready?: true` state, messages can be sent via `send_message/2`, with arguments either the `pid` or the `name` registered on `init`, and the encoded Nostr message to send.
   """
@@ -11,7 +11,7 @@ defmodule Nostrbase.Socket do
   require Mint.HTTP
 
   alias Nostrbase.{RelayAgent, RelayManager, RelayRegistry}
-  alias Nostr.{Event, Message}
+  alias Nostr.Message
 
   defstruct [
     :uri,
@@ -59,7 +59,7 @@ defmodule Nostrbase.Socket do
 
   @impl GenServer
   def init({uri, name}) do
-    {:ok, %__MODULE__{uri: uri, name: name}}
+    {:ok, %__MODULE__{uri: uri, name: name, ready?: false}}
   end
 
   @impl GenServer
@@ -104,7 +104,7 @@ defmodule Nostrbase.Socket do
         Logger.error("Connection is closed")
         {:reply, :error, %{state | closing?: true, ready: false}}
 
-      {:error, state, reason} ->
+      {:error, state, _reason} ->
         {:reply, :error, state}
     end
   end
@@ -118,6 +118,7 @@ defmodule Nostrbase.Socket do
   def handle_call(:status, _from, state) do
     status_data = %{
       url: URI.to_string(state.uri),
+      name: state.name,
       closing?: state.closing?,
       ready?: state.ready?
     }
@@ -219,7 +220,6 @@ defmodule Nostrbase.Socket do
       {:text, text}, state ->
         text
         |> Message.parse()
-        |> IO.inspect()
         |> handle_message(state)
 
         state
@@ -237,8 +237,7 @@ defmodule Nostrbase.Socket do
   end
 
   defp handle_message({:notice, message}, state) do
-    Logger.info("NOTICE from #{state.url.host}: #{message}")
-    registry_dispatch(:notice, message)
+    Logger.info("NOTICE from #{state.uri.host}: #{message}")
     {:ok, state}
   end
 
@@ -246,7 +245,7 @@ defmodule Nostrbase.Socket do
          {:eose, subscription_id},
          state
        ) do
-    registry_dispatch(subscription_id, "EOSE")
+    registry_dispatch(subscription_id, {:eose, subscription_id, state.uri.host})
     {:ok, state}
   end
 
