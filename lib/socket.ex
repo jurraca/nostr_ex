@@ -2,7 +2,25 @@ defmodule Nostrbase.Socket do
   @moduledoc """
   A GenServer implementing a websocket connection to a relay.
 
-  Once it is in `ready?: true` state, messages can be sent via `send_message/2`, with arguments either the `pid` or the `name` registered on `init`, and the encoded Nostr message to send.
+  Once it is in `ready?: true` state, messages can be sent via `send_message/2`,
+  with arguments either the `pid` or the `name` registered on `init`, and the encoded Nostr message to send.
+
+  There are two other API function for this GenServer: `connect/1` to connect to a relay via the GenServer process started at `pid`,
+  and `get_status/1`, which returns a subset of the state:
+  ```
+    %{
+      url: URI.to_string(state.uri),
+      name: state.name,
+      closing?: state.closing?,
+      ready?: state.ready?
+    }
+  ```
+
+  The `send_message/2` function sends a message over the websocket, and does not expect a response.
+  It is a `call`, and will return `:ok` if the socket was in a ready state and successfully sent the message, and `:error` otherwise.
+  Responses will be sent via the websocket as Nostr messages.
+
+  Before terminating, the process will update the `RelayAgent` to delete subscription info associated with this relay.
   """
 
   use GenServer, restart: :transient
@@ -30,6 +48,15 @@ defmodule Nostrbase.Socket do
     GenServer.start_link(__MODULE__, {uri, name}, name: {:via, Registry, {RelayRegistry, name}})
   end
 
+  @doc """
+  Connect to a relay.
+  The GenServer process is first started with the relay name on `init/1`, and connected to separately via this function,
+  since it may take an arbitrary amount of time.
+  By default, the timeout is 3 seconds to connect and upgrade the connection to a websocket.
+
+  The connection still needs to complete the handshake to be ready to receive messages,
+  therefore it is recommended to check the socket's `ready?` status via `get_status/1` before sending messages.
+  """
   def connect(pid) do
     try do
       GenServer.call(pid, :connect, 3_000)
@@ -39,6 +66,9 @@ defmodule Nostrbase.Socket do
     end
   end
 
+  @doc """
+    Send a serialized message to the relay via the connection at this `pid`.
+  """
   def send_message(pid, text) when is_pid(pid) do
     GenServer.call(pid, {:send_text, text})
   end
@@ -53,6 +83,10 @@ defmodule Nostrbase.Socket do
     {:error, "invalid relay_name format, got #{relay_name}"}
   end
 
+  @doc """
+    Get the status of the current connection.
+    Returns the `url`, `name`, `ready?` and `closing?` args from the state.
+  """
   def get_status(pid) do
     GenServer.call(pid, :status)
   end
