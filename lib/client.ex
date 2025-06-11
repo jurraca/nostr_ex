@@ -63,16 +63,11 @@ defmodule Nostrbase.Client do
   def create_note(note, privkey) do
     note
     |> Event.Note.create()
-    |> Event.sign(privkey)
-    |> Message.create_event()
-    |> Message.serialize()
+    |> sign_and_serialize(privkey)
   end
 
   def create_long_form(text, privkey) do
-    Event.create(23, content: text)
-    |> Event.sign(privkey)
-    |> Message.create_event()
-    |> Message.serialize()
+    Event.create(23, content: text) |> sign_and_serialize(privkey)
   end
 
   def create_sub(opts) when is_list(opts) do
@@ -102,6 +97,13 @@ defmodule Nostrbase.Client do
 
   def subscribe(_, sub_id, _), do: {:error, "invalid sub_id format, got #{sub_id}"}
 
+  def sign_and_serialize(event, privkey) do
+    event
+    |> Event.sign(privkey)
+    |> Message.create_event()
+    |> Message.serialize()
+  end
+
   defp do_event_send(privkey, arg, create_fun, opts) do
     with relay_names = get_relays(opts[:send_via]),
          json_event <- create_fun.(arg, privkey) do
@@ -111,9 +113,6 @@ defmodule Nostrbase.Client do
         true -> {:ok, :sent}
         false -> {:error, Enum.filter(results, &match?(:error, &1))}
       end
-    else
-      {:error, reason} -> {:error, reason}
-      _ -> {:error, "Invalid event submitted with argument \"#{arg}\" "}
     end
   end
 
