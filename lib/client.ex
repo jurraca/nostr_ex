@@ -6,16 +6,16 @@ defmodule Nostrbase.Client do
   alias Nostr.{Event, Filter, Message}
   alias Nostrbase.{RelayAgent, RelayManager, Socket, Utils}
 
+  def send_event(relay_name, payload) when is_binary(payload) do
+    Socket.send_message(relay_name, payload)
+  end
+
   def send_note(note, privkey, opts \\ []) do
     do_event_send(privkey, note, &create_note/2, opts)
   end
 
   def send_long_form(text, privkey, opts \\ []) do
     do_event_send(privkey, text, &create_long_form/2, opts)
-  end
-
-  def send_event(relay_name, payload) when is_binary(payload) do
-    Socket.send_message(relay_name, payload)
   end
 
   def send_sub(filter, opts \\ []) do

@@ -18,14 +18,14 @@ defmodule Nostrbase do
 
   @doc """
     Sends a text note via relays
-    opts should include a :send_via key indicating relay_pids to send this note to. See get_relays/1.
+    opts should include a :send_via key indicating relay names to send this note to.
   """
   def send_note(note, privkey, opts \\ []), do: Client.send_note(note, privkey, opts)
 
   def send_long_form(text, privkey, opts \\ []), do: Client.send_long_form(text, privkey, opts)
 
   @doc """
-    Send a REQ message to a relay, by providing a keyword list of filter values, and optionally, relay conn PIDs with a `opts[:send_via]` list.
+    Send a REQ message to a relay, by providing a keyword list of filter values, and optionally, relay registered names with a `opts[:send_via]` list.
   """
   def send_subscription(filter, opts \\ []), do: Client.send_sub(filter, opts)
 
