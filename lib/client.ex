@@ -33,15 +33,12 @@ defmodule Nostrbase.Client do
     end
   end
 
-  def close_sub(relay, sub_id) when is_binary(relay) do
-    close_sub([relay], sub_id)
-  end
-
-  def close_sub(relays, sub_id) when is_list(relays) do
+  def close_sub(sub_id) when is_binary(sub_id) do
     with true <- sub_id in RelayAgent.get_unique_subscriptions(),
-         request = Message.close(sub_id) |> Message.serialize(),
-         relay_names = get_relays(relays) do
-      Enum.map(relay_names, fn relay_name ->
+         relays <- RelayAgent.get_relays_for_sub(sub_id),
+         request = Message.close(sub_id) |> Message.serialize() do
+      relays
+        |> Enum.map(fn relay_name ->
         case send_event(relay_name, request) do
           {:ok, _} -> RelayAgent.delete_subscription(relay_name, sub_id)
           err -> err
@@ -49,8 +46,10 @@ defmodule Nostrbase.Client do
       end)
       |> Nostrbase.Utils.collect()
     else
-      {:error, _} ->
+      false ->
         {:error, "subscription ID not found: #{sub_id}"}
+      _ ->
+        {:error, "could not get relays for sub_id: #{sub_id}"}
     end
   end
 
@@ -110,7 +109,7 @@ defmodule Nostrbase.Client do
 
       case Enum.all?(results, &(&1 == :ok)) do
         true -> {:ok, :sent}
-        false -> {:error, Enum.filter(results, &match?({:error, _}, &1))}
+        false -> {:error, Enum.filter(results, &match?(:error, &1))}
       end
     else
       {:error, reason} -> {:error, reason}

@@ -50,11 +50,11 @@ defmodule Nostrbase do
     send_subscription([authors: [pubkey], kinds: [0]], opts)
   end
 
-  def close_sub(sub_id, relay_url), do: Client.close_sub(relay_url, sub_id)
+  def close_sub(sub_id), do: Client.close_sub(sub_id)
 
   def close_all_subs do
-    RelayAgent.get_relays_by_sub()
-    |> Enum.map(fn sub, relays -> Client.close_sub(sub, relays) end)
+    RelayAgent.get_unique_subscriptions()
+    |> Enum.map(&Client.close_sub(&1))
   end
 
   def listen_for_sub(sub_id), do: Registry.register(Nostrbase.PubSub, sub_id, [])
