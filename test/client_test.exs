@@ -16,7 +16,7 @@ defmodule Nostrbase.ClientTest do
     test "creates a valid long form event message" do
       content = "# My Long Form Post\n\nThis is a test."
       message = Client.create_long_form(content, @privkey)
-      assert ["EVENT", %{"kind" => 23, "content" => ^content}] = JSON.decode!(message)
+      assert ["EVENT", %{"kind" => 30023, "content" => ^content}] = JSON.decode!(message)
     end
   end
 

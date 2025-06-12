@@ -120,9 +120,8 @@ defmodule Nostrbase.Client do
   Create a kind 1 event with content, signed and serialized.
   """
   def create_note(note, privkey) when is_binary(note) do
-    note
-    |> Event.Note.create()
-    |> sign_and_serialize(privkey)
+    %{event: event} = Event.Note.create(note)
+    sign_and_serialize(event, privkey)
   end
 
   @doc """
