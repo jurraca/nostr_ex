@@ -115,6 +115,9 @@ defmodule Nostrbase.Socket do
       state = %{state | conn: conn, request_ref: ref, caller: from, ready?: false}
       {:reply, :ok, state}
     else
+      {:error, reason} when is_list(reason) ->
+        msg = if Keyword.get(reason, :nxdomain), do: "Invalid domain: got #{uri.host}", else: "unknown"
+        {:stop, :normal, {:error, msg}, state}
       {:error, reason} ->
         Logger.error(reason)
         {:stop, :normal, {:error, "something went wrong"}, state}
@@ -321,7 +324,7 @@ defmodule Nostrbase.Socket do
 
   @impl GenServer
   def terminate(_reason, state) do
-    Logger.error("Terminating #{state.uri.host} ")
+    Logger.info("Terminating #{state.uri.host} ")
     RelayAgent.delete_relay(state.name)
   end
 

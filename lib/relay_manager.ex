@@ -116,7 +116,10 @@ defmodule Nostrbase.RelayManager do
   end
 
   defp parse_url(url) do
-    uri = URI.parse(url) |> Map.update!(:path, &(&1 || "/"))
+    uri =
+      URI.parse(url)
+      |> Map.update!(:path, &(&1 || "/"))
+      |> Map.update!(:host, fn host -> if host == "", do: nil, else: host end)
 
     if uri.scheme in ["ws", "wss"] and uri.host do
       {:ok, uri}
