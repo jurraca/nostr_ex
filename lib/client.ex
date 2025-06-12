@@ -136,7 +136,7 @@ defmodule Nostrbase.Client do
 
   Returns `{:ok, subscription_id, serialized_message}`.
   """
-  def create_sub(opts) when is_list(opts) do
+  def create_sub(opts) do
     cond do
       # Single filter as keyword list
       Keyword.keyword?(opts) ->
