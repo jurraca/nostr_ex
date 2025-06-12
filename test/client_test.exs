@@ -57,22 +57,23 @@ defmodule Nostrbase.ClientTest do
     test "signs and serializes a valid event" do
       event = Event.create(1, content: "test content")
       result = Client.sign_and_serialize(event, @privkey)
-      
+
       assert is_binary(result)
       assert ["EVENT", %{"kind" => 1, "content" => "test content"}] = JSON.decode!(result)
     end
 
     test "returns error for invalid event" do
       invalid_event = %{not: "an event"}
-      assert {:error, "invalid event provided, must be an %Event{} struct."} = 
-        Client.sign_and_serialize(invalid_event, @privkey)
+
+      assert {:error, "invalid event provided, must be an %Event{} struct."} =
+               Client.sign_and_serialize(invalid_event, @privkey)
     end
   end
 
   describe "subscribe/3" do
     test "returns error for invalid sub_id format" do
-      assert {:error, "invalid sub_id format, got 123"} = 
-        Client.subscribe("relay_name", 123, "payload")
+      assert {:error, "invalid sub_id format, got 123"} =
+               Client.subscribe("relay_name", 123, "payload")
     end
   end
 

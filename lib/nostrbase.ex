@@ -1,4 +1,3 @@
-
 defmodule Nostrbase do
   @moduledoc """
   A lightweight, OTP-compliant Nostr client library for Elixir applications.

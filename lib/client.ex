@@ -1,4 +1,3 @@
-
 defmodule Nostrbase.Client do
   @moduledoc """
   Client operations for the Nostr protocol.
