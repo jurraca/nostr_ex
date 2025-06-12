@@ -1,45 +1,67 @@
+
 defmodule Nostrbase.Client do
   @moduledoc """
-    Transmit notes and other stuff via relays.
+  Client operations for the Nostr protocol.
 
-    Mainly wraps the websocket wlient in `Socket`. When using functions like `send_note` or similar,
-    the `opts` arguments will take a `send_via` option which takes relays to send the event to.
-    By default it will send to all relays.
+  This module handles the core protocol operations like signing events,
+  serializing messages, and managing the WebSocket communication layer.
+  Most users should use the higher-level `Nostrbase` module instead.
+
+  ## Event Creation and Signing
+
+      iex> Client.create_note("Hello", private_key)
+      "{\"content\":\"Hello\",\"created_at\":...}"
+
+  ## Subscription Management
+
+      iex> Client.send_sub([authors: [pubkey], kinds: [1]])
+      {:ok, "subscription_id"}
   """
 
   alias Nostr.{Event, Filter, Message}
   alias Nostrbase.{RelayAgent, RelayManager, Socket, Utils}
 
+  # === Event Publishing ===
+
   @doc """
-    Send a serialized payload to the `relay`.
-    `relay` can either be a PID or a relay name as registered in the `RelayRegistry`.
+  Send a serialized payload to a specific relay.
+
+  `relay` can be either a PID or a relay name registered in the RelayRegistry.
   """
   def send_event(relay, payload) when is_binary(payload) do
     Socket.send_message(relay, payload)
   end
 
   @doc """
-    Send a kind 1 note.
-    Valid `opts`:
-      - `send_via`: a list of relays to send the event to.
+  Send a kind 1 note.
+
+  ## Options
+  - `:send_via` - List of relays to send the event to. Defaults to all connected relays.
   """
   def send_note(note, privkey, opts \\ []) do
     do_event_send(privkey, note, &create_note/2, opts)
   end
 
   @doc """
-    Send a kind 23 long-form note.
-    Valid `opts`:
-      - `send_via`: a list of relays to send the event to.
+  Send a kind 30023 long-form note.
+
+  ## Options
+  - `:send_via` - List of relays to send the event to. Defaults to all connected relays.
   """
   def send_long_form(text, privkey, opts \\ []) do
     do_event_send(privkey, text, &create_long_form/2, opts)
   end
 
+  # === Subscription Management ===
+
   @doc """
-    Send a subscription request.
-    `filter` is a keyword list of arguments for a `Nostr.Filter` struct.
-    Since subscriptions are asynchronous.
+  Send a subscription request.
+
+  `filter` can be:
+  - A keyword list of filter arguments
+  - A list of keyword lists for multiple filters
+
+  Returns `{:ok, subscription_id}` on success.
   """
   def send_sub(filter, opts \\ []) do
     with {:ok, sub_id, message} <- create_sub(filter),
@@ -57,8 +79,9 @@ defmodule Nostrbase.Client do
   end
 
   @doc """
-    Close a subscription with ID `sub_id`.
-    The subscription `CLOSE` message will be sent to all relays which know about this subscription.
+  Close a subscription by ID.
+
+  Sends CLOSE message to all relays that know about this subscription.
   """
   def close_sub(sub_id) when is_binary(sub_id) do
     with true <- sub_id in RelayAgent.get_unique_subscriptions(),
@@ -71,7 +94,7 @@ defmodule Nostrbase.Client do
           err -> err
         end
       end)
-      |> Nostrbase.Utils.collect()
+      |> Utils.collect()
     else
       false ->
         {:error, "subscription ID not found: #{sub_id}"}
@@ -82,7 +105,7 @@ defmodule Nostrbase.Client do
   end
 
   @doc """
-    Close a connection to a relay.
+  Close a connection to a relay by name.
   """
   def close_conn(relay_name) do
     case Registry.lookup(Nostrbase.RelayRegistry, relay_name) do
@@ -91,8 +114,10 @@ defmodule Nostrbase.Client do
     end
   end
 
+  # === Event Creation ===
+
   @doc """
-    Create a kind 1 event with content `note`, signed and serialized.
+  Create a kind 1 event with content, signed and serialized.
   """
   def create_note(note, privkey) when is_binary(note) do
     note
@@ -101,14 +126,16 @@ defmodule Nostrbase.Client do
   end
 
   @doc """
-    Create a kind 23 event with content `text`, signed and serialized.
+  Create a kind 30023 event with content, signed and serialized.
   """
   def create_long_form(text, privkey) do
-    Event.create(23, content: text) |> sign_and_serialize(privkey)
+    Event.create(30023, content: text) |> sign_and_serialize(privkey)
   end
 
   @doc """
-    Create a subscription with arguments `opts`, which must be valid fields for a `Filter` struct.
+  Create a subscription message with the given filters.
+
+  Returns `{:ok, subscription_id, serialized_message}`.
   """
   def create_sub(opts) when is_list(opts) do
     cond do
@@ -129,7 +156,7 @@ defmodule Nostrbase.Client do
   end
 
   @doc """
-    Subscribe with a serialized "REQ" `payload` with ID `sub_id` via relay with registered name `relay_name`.
+  Subscribe to a relay with a specific subscription ID and message.
   """
   def subscribe(relay_name, sub_id, payload) when is_binary(sub_id) do
     with :ok <- send_event(relay_name, payload),
@@ -141,7 +168,7 @@ defmodule Nostrbase.Client do
   def subscribe(_, sub_id, _), do: {:error, "invalid sub_id format, got #{sub_id}"}
 
   @doc """
-    Sign and serialize an `event` with private key `privkey`.
+  Sign an event with a private key and serialize it as a JSON message.
   """
   def sign_and_serialize(%Event{} = event, privkey) do
     event
@@ -152,6 +179,8 @@ defmodule Nostrbase.Client do
 
   def sign_and_serialize(_, _),
     do: {:error, "invalid event provided, must be an %Event{} struct."}
+
+  # === Private Functions ===
 
   defp do_event_send(privkey, arg, create_fun, opts) do
     with relay_names = get_relays(opts[:send_via]),
