@@ -183,9 +183,24 @@ defmodule Nostrbase.Socket do
 
       _other ->
         Logger.info("Terminating connection to #{state.uri.host}: #{inspect(reason)}")
-    end
 
-    RelayAgent.delete_relay(state.name)
+        case RelayAgent.get(state.name) do
+          nil ->
+            :ok
+
+          subscriptions when is_list(subscriptions) ->
+            Enum.each(subscriptions, fn sub_id ->
+              close_message =
+                sub_id
+                |> Message.close()
+                |> Message.serialize()
+
+              _ = send_message(state.name, close_message)
+            end)
+        end
+
+        RelayAgent.delete_relay(state.name)
+    end
   end
 
   ## Private Functions
