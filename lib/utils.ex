@@ -29,4 +29,8 @@ defmodule Nostrbase.Utils do
     |> Atom.to_string()
     |> String.replace("_", ".")
   end
+
+  def host_from_name(relay_name) when is_binary(relay_name) do
+    String.to_atom(relay_name) |> host_from_name()
+  end
 end
