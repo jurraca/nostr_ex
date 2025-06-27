@@ -1,13 +1,10 @@
-
 # NostrEx
 
-A lightweight, OTP-compliant Nostr client library for Elixir applications. This library provides a clean interface for connecting to Nostr relays, managing subscriptions, and handling events in the Nostr protocol.
+A lightweight, OTP-compliant Nostr client library for Elixir applications. This library provides a clean interface for connecting to Nostr relays, managing subscriptions, and handling Nostr events.
 
 ## Features
 
-- Multi-relay support with automatic connection management
 - OTP-compliant architecture with proper supervision
-- Automatic reconnection handling
 - Simple subscription management
 - NIP-05 verification support
 - Built on top of Mint WebSocket for reliable connections
@@ -45,6 +42,15 @@ NostrEx.send_long_form("# My Blog Post\n\nContent here...", private_key)
 
 ### Subscriptions
 
+NostrEx forwards messages received via a Nostr subscription to the process that created the subscription.
+
+Put another way, the process you call a `NostrEx.subscribe_*` function from will then receive the events for that subscription.
+It's up to you to decide how to handle those received events.
+
+You can subscribe to any subscription ID by calling
+`Registry.register(NostrEx.PubSub, sub_id, nil)` from the process you want to be subscribed,
+and similarly unsubscribe the current process with `Registry.unregister(NostrEx.PubSub, sub_id)`.
+
 ```elixir
 # Subscribe to a user's notes
 NostrEx.subscribe_notes(pubkey)
@@ -78,7 +84,7 @@ NostrEx uses a supervision tree with the following components:
 - `RelayAgent`: manages subscription state across relays
 - `Socket`: handles individual WebSocket connections
 - `PubSub`: use Registry to dispatch events to listeners
-- `RelayRegistry`: Registry for mapping relay names to connections
+- `RelayRegistry`: Registry for mapping relay names to connection pids
 
 ## Contributing
 
