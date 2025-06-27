@@ -1,6 +1,6 @@
 defmodule Nostrbase do
   @moduledoc """
-  The main module to use as a client. Connect to relays, send events and subscriptions, inspect and close connections etc.
+    Connect to relays, send events and subscriptions, inspect and close connections etc.
   """
 
   alias Nostrbase.{Client, RelayAgent, RelayManager}
@@ -17,8 +17,8 @@ defmodule Nostrbase do
   end
 
   @doc """
-    Sends a text note via relays
-    opts should include a :send_via key indicating relay names to send this note to.
+    Sends a text note via relays.
+    `opts` should include a `:send_via` key indicating relay names to send this note to.
   """
   def send_note(note, privkey, opts \\ []), do: Client.send_note(note, privkey, opts)
 
