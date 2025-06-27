@@ -1,4 +1,4 @@
-defmodule Nostrbase.Socket do
+defmodule NostrEx.Socket do
   @moduledoc """
   A GenServer implementing a websocket connection to a relay.
 
@@ -28,7 +28,7 @@ defmodule Nostrbase.Socket do
   require Logger
   require Mint.HTTP
 
-  alias Nostrbase.{RelayAgent, RelayManager, RelayRegistry}
+  alias NostrEx.{RelayAgent, RelayManager, RelayRegistry}
   alias Nostr.Message
 
   @default_connect_timeout 3_000
@@ -417,13 +417,13 @@ defmodule Nostrbase.Socket do
   Send a message to a given pubsub topic
   """
   def registry_dispatch(sub_id, message) when is_binary(sub_id) do
-    Registry.dispatch(Nostrbase.PubSub, sub_id, fn entries ->
+    Registry.dispatch(NostrEx.PubSub, sub_id, fn entries ->
       for {pid, _} <- entries, do: send(pid, message)
     end)
   end
 
   def registry_dispatch(key, message) do
-    Registry.dispatch(Nostrbase.PubSub, key, fn entries ->
+    Registry.dispatch(NostrEx.PubSub, key, fn entries ->
       for {pid, _} <- entries, do: send(pid, message)
     end)
   end

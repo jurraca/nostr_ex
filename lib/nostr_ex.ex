@@ -1,30 +1,30 @@
-defmodule Nostrbase do
+defmodule NostrEx do
   @moduledoc """
   A lightweight, OTP-compliant Nostr client library for Elixir applications.
 
   ## Quick Start
 
       # Connect to a relay
-      {:ok, _pid} = Nostrbase.add_relay("wss://relay.example.com")
+      {:ok, _pid} = NostrEx.add_relay("wss://relay.example.com")
 
       # Send a note
-      Nostrbase.send_note("Hello Nostr!", private_key)
+      NostrEx.send_note("Hello Nostr!", private_key)
 
       # Subscribe to a user's notes
-      {:ok, sub_id} = Nostrbase.subscribe_notes(pubkey)
+      {:ok, sub_id} = NostrEx.subscribe_notes(pubkey)
 
       # Listen for events
-      Nostrbase.listen_for_sub(sub_id)
+      NostrEx.listen_for_sub(sub_id)
 
   ## Modules
 
-  - `Nostrbase.Client` - Low-level client operations
-  - `Nostrbase.RelayManager` - Relay connection management
-  - `Nostrbase.Socket` - WebSocket connection handling
-  - `Nostrbase.Nip05` - NIP-05 verification utilities
+  - `NostrEx.Client` - Low-level client operations
+  - `NostrEx.RelayManager` - Relay connection management
+  - `NostrEx.Socket` - WebSocket connection handling
+  - `NostrEx.Nip05` - NIP-05 verification utilities
   """
 
-  alias Nostrbase.{Client, RelayAgent, RelayManager}
+  alias NostrEx.{Client, RelayAgent, RelayManager}
 
   # === Relay Management ===
 
@@ -33,10 +33,10 @@ defmodule Nostrbase do
 
   ## Examples
 
-      iex> Nostrbase.add_relay("wss://relay.example.com")
+      iex> NostrEx.add_relay("wss://relay.example.com")
       {:ok, #PID<0.123.0>}
 
-      iex> Nostrbase.add_relay("invalid-url")
+      iex> NostrEx.add_relay("invalid-url")
       {:error, "Invalid URL"}
   """
   def add_relay(relay_url) do
@@ -52,14 +52,14 @@ defmodule Nostrbase do
 
   ## Examples
 
-      iex> Nostrbase.remove_relay("wss://relay.example.com")
+      iex> NostrEx.remove_relay("wss://relay.example.com")
       :ok
   """
   def remove_relay(relay_url) when is_binary(relay_url) do
     relay_url
     |> URI.parse()
     |> Map.get(:host)
-    |> Nostrbase.Utils.name_from_host()
+    |> NostrEx.Utils.name_from_host()
     |> Client.close_conn()
   end
 
@@ -86,10 +86,10 @@ defmodule Nostrbase do
 
   ## Examples
 
-      iex> Nostrbase.send_note("Hello Nostr!", private_key)
+      iex> NostrEx.send_note("Hello Nostr!", private_key)
       {:ok, :sent}
 
-      iex> Nostrbase.send_note("Hello specific relay!", private_key, send_via: ["relay_example_com"])
+      iex> NostrEx.send_note("Hello specific relay!", private_key, send_via: ["relay_example_com"])
       {:ok, :sent}
   """
   def send_note(note, privkey, opts \\ []), do: Client.send_note(note, privkey, opts)
@@ -103,7 +103,7 @@ defmodule Nostrbase do
 
   ## Examples
 
-      iex> Nostrbase.send_long_form("# My Blog Post\\n\\nContent here...", private_key)
+      iex> NostrEx.send_long_form("# My Blog Post\\n\\nContent here...", private_key)
       {:ok, :sent}
   """
   def send_long_form(text, privkey, opts \\ []), do: Client.send_long_form(text, privkey, opts)
@@ -119,7 +119,7 @@ defmodule Nostrbase do
 
   ## Examples
 
-      iex> Nostrbase.send_subscription([authors: [pubkey], kinds: [1]], send_via: ["relay_example_com"])
+      iex> NostrEx.send_subscription([authors: [pubkey], kinds: [1]], send_via: ["relay_example_com"])
       {:ok, "subscription_id"}
   """
   def send_subscription(filter, opts \\ []), do: Client.send_sub(filter, opts)
@@ -129,7 +129,7 @@ defmodule Nostrbase do
 
   ## Examples
 
-      iex> Nostrbase.subscribe_notes(pubkey)
+      iex> NostrEx.subscribe_notes(pubkey)
       {:ok, "subscription_id"}
   """
   def subscribe_notes(pubkey, opts \\ []) do
@@ -141,7 +141,7 @@ defmodule Nostrbase do
 
   ## Examples
 
-      iex> Nostrbase.subscribe_follows(pubkey)
+      iex> NostrEx.subscribe_follows(pubkey)
       {:ok, "subscription_id"}
   """
   def subscribe_follows(pubkey, opts \\ []) do
@@ -153,7 +153,7 @@ defmodule Nostrbase do
 
   ## Examples
 
-      iex> Nostrbase.subscribe_profile(pubkey)
+      iex> NostrEx.subscribe_profile(pubkey)
       {:ok, "subscription_id"}
   """
   def subscribe_profile(pubkey, opts \\ []) do
@@ -165,7 +165,7 @@ defmodule Nostrbase do
 
   ## Examples
 
-      iex> Nostrbase.close_subscription("subscription_id")
+      iex> NostrEx.close_subscription("subscription_id")
       {:ok, :closed}
   """
   def close_subscription(sub_id), do: Client.close_sub(sub_id)
@@ -175,7 +175,7 @@ defmodule Nostrbase do
 
   ## Examples
 
-      iex> Nostrbase.close_all_subscriptions()
+      iex> NostrEx.close_all_subscriptions()
       [ok: :closed, ok: :closed]
   """
   def close_all_subscriptions do
@@ -192,11 +192,11 @@ defmodule Nostrbase do
 
   ## Examples
 
-      iex> {:ok, sub_id} = Nostrbase.subscribe_notes(pubkey)
-      iex> Nostrbase.listen_for_subscription(sub_id)
+      iex> {:ok, sub_id} = NostrEx.subscribe_notes(pubkey)
+      iex> NostrEx.listen_for_subscription(sub_id)
       :ok
   """
-  def listen_for_subscription(sub_id), do: Registry.register(Nostrbase.PubSub, sub_id, [])
+  def listen_for_subscription(sub_id), do: Registry.register(NostrEx.PubSub, sub_id, [])
 
   # === Utility Functions ===
 

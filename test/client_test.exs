@@ -1,6 +1,6 @@
-defmodule Nostrbase.ClientTest do
+defmodule NostrEx.ClientTest do
   use ExUnit.Case
-  alias Nostrbase.Client
+  alias NostrEx.Client
   alias Nostr.Event
 
   @privkey "5ee1c8000ab28edd64d74a7d951af749cfb0b7e1f31a4ad87940a55b0e7e6b3d"

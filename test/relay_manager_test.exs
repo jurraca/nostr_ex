@@ -1,6 +1,6 @@
-defmodule Nostrbase.RelayManagerTest do
+defmodule NostrEx.RelayManagerTest do
   use ExUnit.Case
-  alias Nostrbase.RelayManager
+  alias NostrEx.RelayManager
 
   describe "URL parsing" do
     test "rejects HTTP URLs" do
