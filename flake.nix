@@ -29,7 +29,7 @@
     devShells = forAllSystems (system: let
       pkgs = nixpkgsFor system;
     in {
-      default = pkgs.callPackage ./shell.nix {};
+      default = pkgs.callPackage ./nix/shell.nix {};
     });
   };
 }

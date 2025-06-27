@@ -5,7 +5,6 @@
   "certifi": {:hex, :certifi, "2.12.0", "2d1cca2ec95f59643862af91f001478c9863c2ac9cb6e2f89780bfd8de987329", [:rebar3], [], "hexpm", "ee68d85df22e554040cdb4be100f33873ac6051387baf6a8f6ce82272340ff1c"},
   "combine": {:hex, :combine, "0.10.0", "eff8224eeb56498a2af13011d142c5e7997a80c8f5b97c499f84c841032e429f", [:mix], [], "hexpm", "1b1dbc1790073076580d0d1d64e42eae2366583e7aecd455d1215b0d16f2451b"},
   "decimal": {:hex, :decimal, "2.1.1", "5611dca5d4b2c3dd497dec8f68751f1f1a54755e8ed2a966c2633cf885973ad6", [:mix], [], "hexpm", "53cfe5f497ed0e7771ae1a475575603d77425099ba5faef9394932b35020ffcc"},
-  "deps_nix": {:hex, :deps_nix, "2.2.0", "648321171b7152ba1a980b5767af553bfa52a86dcfa1f72efa576f18b363b374", [:mix], [{:mint, "~> 1.0", [hex: :mint, repo: "hexpm", optional: false]}], "hexpm", "cc302e2b3edc51dc658b32552f3bbef276f722f78936ac923b38fa60f899f645"},
   "ecto": {:git, "https://github.com/elixir-ecto/ecto.git", "88100b862f69682e4bec4bd11ab8d459346817b0", [ref: "master"]},
   "elixir_make": {:hex, :elixir_make, "0.9.0", "6484b3cd8c0cee58f09f05ecaf1a140a8c97670671a6a0e7ab4dc326c3109726", [:mix], [], "hexpm", "db23d4fd8b757462ad02f8aa73431a426fe6671c80b200d9710caf3d1dd0ffdb"},
   "ex_bech32": {:hex, :ex_bech32, "0.5.1", "7adbd9969ba06c2f8426d0692bc0a603c44e84c39f7fab46446191fde46b17fb", [:mix], [{:rustler, ">= 0.0.0", [hex: :rustler, repo: "hexpm", optional: true]}, {:rustler_precompiled, "~> 0.6", [hex: :rustler_precompiled, repo: "hexpm", optional: false]}], "hexpm", "ccf16f7030dc6d652fbae8de77c31b5781bdda6492f12c32f604ef8e8e944895"},
