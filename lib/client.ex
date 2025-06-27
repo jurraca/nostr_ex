@@ -97,6 +97,7 @@ defmodule NostrEx.Client do
   def create_note(note, privkey) when is_binary(note) do
     note
     |> Event.Note.create()
+    |> Map.get(:event)
     |> sign_and_serialize(privkey)
   end
 
