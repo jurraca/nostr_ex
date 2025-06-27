@@ -11,10 +11,6 @@
       beamPackages = prev.beam.packagesWith erlang;
       elixir = beamPackages.elixir_1_18;
       hex = beamPackages.hex;
-      final.mix2nix = prev.mix2nix.overrideAttrs {
-        nativeBuildInputs = [ final.elixir ];
-        buildInputs = [ final.erlang ];
-      };
     };
 
     forAllSystems = nixpkgs.lib.genAttrs [
@@ -30,29 +26,6 @@
         overlays = [overlay];
       };
     in {
-    packages = forAllSystems(system: let
-      pkgs = nixpkgsFor system;
-      # FIXME: import the Mix deps into Nix by running `mix2nix > deps.nix` from a dev shell
-      mixNixDeps = import ./deps.nix {
-        lib = pkgs.lib;
-        beamPackages = pkgs.beamPackages;
-      };
-      in rec {
-        default = pkgs.beamPackages.mixRelease {
-            pname = "my-elixir-lib";
-            # Elixir lib source path
-            src = ./.;
-            version = "0.1.0";
-
-	    # FIXME: once you've addressed the fixme comment above,
-	    # uncomment the following line to include mixNixDeps
-            inherit mixNixDeps;
-
-	    # Add inputs to the build if you need to
-            buildInputs = [ pkgs.elixir ];
-          };
-      });
-
     devShells = forAllSystems (system: let
       pkgs = nixpkgsFor system;
     in {

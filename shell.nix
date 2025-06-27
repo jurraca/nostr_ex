@@ -2,7 +2,6 @@
   pkgs,
   lib
 }: let
-  # define packages to install
   basePackages = with pkgs; [
     elixir
     hex
