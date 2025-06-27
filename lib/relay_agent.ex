@@ -1,4 +1,4 @@
-defmodule Nostrbase.RelayAgent do
+defmodule NostrEx.RelayAgent do
   @moduledoc """
     Agent that maps relay connections to their active subscriptions.
     We use this to manage subscription lifecycle and track which relays have which subscriptions.

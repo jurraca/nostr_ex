@@ -1,11 +1,11 @@
-defmodule Nostrbase.RelayManager do
+defmodule NostrEx.RelayManager do
   @moduledoc """
   A Dynamic Supervisor which supervises connections to relays.
   This module provides a few functions to faciliate getting the status of individual websocket conns.
   """
 
   use DynamicSupervisor
-  alias Nostrbase.{RelayRegistry, Socket, Utils}
+  alias NostrEx.{RelayRegistry, Socket, Utils}
 
   @name RelaySupervisor
 

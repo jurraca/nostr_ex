@@ -1,5 +1,5 @@
 
-# Nostrbase
+# NostrEx
 
 A lightweight, OTP-compliant Nostr client library for Elixir applications. This library provides a clean interface for connecting to Nostr relays, managing subscriptions, and handling events in the Nostr protocol.
 
@@ -14,12 +14,12 @@ A lightweight, OTP-compliant Nostr client library for Elixir applications. This 
 
 ## Installation
 
-Add `nostrbase` to your list of dependencies in `mix.exs`:
+Add `nostr_ex` to your list of dependencies in `mix.exs`:
 
 ```elixir
 def deps do
   [
-    {:nostrbase, "~> 0.1.0"}
+    {:nostr_ex, "~> 0.1.0"}
   ]
 end
 ```
@@ -30,33 +30,33 @@ end
 
 ```elixir
 # Connect to a relay
-{:ok, _pid} = Nostrbase.add_relay("wss://relay.example.com")
+{:ok, _pid} = NostrEx.add_relay("wss://relay.example.com")
 ```
 
 ### Sending Notes
 
 ```elixir
 # Send a simple note
-Nostrbase.send_note("Hello Nostr!", private_key)
+NostrEx.send_note("Hello Nostr!", private_key)
 
 # Send a long-form note
-Nostrbase.send_long_form("# My Blog Post\n\nContent here...", private_key)
+NostrEx.send_long_form("# My Blog Post\n\nContent here...", private_key)
 ```
 
 ### Subscriptions
 
 ```elixir
 # Subscribe to a user's notes
-Nostrbase.subscribe_notes(pubkey)
+NostrEx.subscribe_notes(pubkey)
 
 # Get a user's profile
-Nostrbase.subscribe_profile(pubkey)
+NostrEx.subscribe_profile(pubkey)
 
 # Get a user's following list
-Nostrbase.subscribe_follows(pubkey)
+NostrEx.subscribe_follows(pubkey)
 
 # Custom subscription with filters
-Nostrbase.send_subscription([
+NostrEx.send_subscription([
   authors: [pubkey],
   kinds: [1],
   since: unix_timestamp
@@ -67,12 +67,12 @@ Nostrbase.send_subscription([
 
 ```elixir
 # Verify a NIP-05 identifier
-Nostrbase.Nip05.verify("user@example.com")
+NostrEx.Nip05.verify("user@example.com")
 ```
 
 ## Architecture
 
-Nostrbase uses a supervision tree with the following components:
+NostrEx uses a supervision tree with the following components:
 
 - `RelayManager`: supervises WebSocket connections to relays
 - `RelayAgent`: manages subscription state across relays

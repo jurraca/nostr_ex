@@ -1,9 +1,9 @@
-defmodule Nostrbase do
+defmodule NostrEx do
   @moduledoc """
     Connect to relays, send events and subscriptions, inspect and close connections etc.
   """
 
-  alias Nostrbase.{Client, RelayAgent, RelayManager}
+  alias NostrEx.{Client, RelayAgent, RelayManager}
 
   @doc """
   Connect to a relay via its URL.
@@ -57,5 +57,5 @@ defmodule Nostrbase do
     |> Enum.map(&Client.close_sub(&1))
   end
 
-  def listen_for_sub(sub_id), do: Registry.register(Nostrbase.PubSub, sub_id, [])
+  def listen_for_sub(sub_id), do: Registry.register(NostrEx.PubSub, sub_id, [])
 end

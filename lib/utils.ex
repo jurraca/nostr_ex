@@ -1,4 +1,4 @@
-defmodule Nostrbase.Utils do
+defmodule NostrEx.Utils do
   @doc """
   Aggregates a list of :ok / :error tuples into a single tuple.
   """

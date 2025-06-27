@@ -1,4 +1,4 @@
-defmodule Nostrbase.Client do
+defmodule NostrEx.Client do
   @moduledoc """
     Transmit notes and other stuff via relays.
 
@@ -8,7 +8,7 @@ defmodule Nostrbase.Client do
   """
 
   alias Nostr.{Event, Filter, Message}
-  alias Nostrbase.{RelayAgent, RelayManager, Socket, Utils}
+  alias NostrEx.{RelayAgent, RelayManager, Socket, Utils}
 
   @doc """
     Send a serialized payload to the `relay`.
@@ -43,7 +43,7 @@ defmodule Nostrbase.Client do
   """
   def send_sub(filter, opts \\ []) do
     with {:ok, sub_id, message} <- create_sub(filter),
-         {:ok, _pid} <- Registry.register(Nostrbase.PubSub, sub_id, nil) do
+         {:ok, _pid} <- Registry.register(NostrEx.PubSub, sub_id, nil) do
       opts[:send_via]
       |> get_relays()
       |> Enum.each(fn relay_name ->
@@ -71,7 +71,7 @@ defmodule Nostrbase.Client do
           err -> err
         end
       end)
-      |> Nostrbase.Utils.collect()
+      |> NostrEx.Utils.collect()
     else
       false ->
         {:error, "subscription ID not found: #{sub_id}"}
@@ -85,7 +85,7 @@ defmodule Nostrbase.Client do
     Close a connection to a relay.
   """
   def close_conn(relay_name) do
-    case Registry.lookup(Nostrbase.RelayRegistry, relay_name) do
+    case Registry.lookup(NostrEx.RelayRegistry, relay_name) do
       [{pid, _}] -> DynamicSupervisor.terminate_child(RelayManager, pid)
       _ -> {:error, :not_found}
     end

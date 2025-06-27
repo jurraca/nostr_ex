@@ -1,6 +1,6 @@
-defmodule Nostrbase.RelayAgentTest do
+defmodule NostrEx.RelayAgentTest do
   use ExUnit.Case
-  alias Nostrbase.RelayAgent
+  alias NostrEx.RelayAgent
 
   setup do
     RelayAgent.start_link(%{})

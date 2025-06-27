@@ -1,4 +1,4 @@
-defmodule Nostrbase.Nip05 do
+defmodule NostrEx.Nip05 do
   @moduledoc """
   Verify DNS identifiers from profiles.
   """
