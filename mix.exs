@@ -9,11 +9,7 @@ defmodule NostrEx.MixProject do
       start_permanent: Mix.env() == :prod,
       deps: deps(),
       package: package(),
-      docs: docs(),
-      aliases: [
-        "deps.get": ["deps.get", "deps.nix"],
-        "deps.update": ["deps.update", "deps.nix"]
-      ]
+      docs: docs()
     ]
   end
 
