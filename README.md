@@ -86,6 +86,10 @@ NostrEx uses a supervision tree with the following components:
 - `PubSub`: use Registry to dispatch events to listeners
 - `RelayRegistry`: Registry for mapping relay names to connection pids
 
+This library is built on [Sgiath](https://github.com/Sgiath)'s [nostr_lib](https://github.com/Sgiath/nostr-lib) library.
+This dependency compiles the libsecp256k1 C library for cryptographic operations, therefore you will need a C compiler
+to compile this project.
+
 ## Contributing
 
 Issues and pull requests are welcome! Please ensure you add tests for any new functionality.
