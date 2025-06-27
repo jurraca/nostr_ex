@@ -9,7 +9,11 @@ defmodule NostrEx.MixProject do
       start_permanent: Mix.env() == :prod,
       deps: deps(),
       package: package(),
-      docs: docs()
+      docs: docs(),
+      aliases: [
+        "deps.get": ["deps.get", "deps.nix"],
+        "deps.update": ["deps.update", "deps.nix"]
+      ]
     ]
   end
 
@@ -49,7 +53,8 @@ defmodule NostrEx.MixProject do
     [
       {:nostr_lib, "~> 0.1.1"},
       {:mint_web_socket, "~> 1.0.3"},
-      {:req, "0.5.0"}
+      {:req, "0.5.0"},
+      {:deps_nix, "~> 2.2.0", only: :dev}
     ]
   end
 end

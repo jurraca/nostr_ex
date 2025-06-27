@@ -6,7 +6,6 @@
   basePackages = with pkgs; [
     elixir
     hex
-    mix2nix
   ];
 in
   pkgs.mkShell {
