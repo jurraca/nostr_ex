@@ -5,6 +5,8 @@
   basePackages = with pkgs; [
     elixir
     hex
+    gnumake
+    autoreconfHook
   ];
 in
   pkgs.mkShell {
