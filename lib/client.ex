@@ -20,6 +20,8 @@ defmodule NostrEx.Client do
   alias Nostr.{Event, Filter, Message}
   alias NostrEx.{RelayAgent, RelayManager, Socket, Utils}
 
+  require Logger
+
   # === Event Publishing ===
 
   @doc """
@@ -218,5 +220,8 @@ defmodule NostrEx.Client do
     end)
   end
 
-  defp get_relays(relay_list), do: {:error, "invalid relay list provided, got: #{relay_list}"}
+  defp get_relays(relay_list) do
+    Logger.error("invalid relay list provided, got: #{Enum.join(relay_list, ", ")}")
+    []
+  end
 end
