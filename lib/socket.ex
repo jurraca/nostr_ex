@@ -369,8 +369,8 @@ defmodule NostrEx.Socket do
 
   defp handle_nostr_message({:ok, event_id, success, message}, state) do
     status = if success, do: "accepted", else: "rejected"
-    reason = if message == "", do: "no reason given", else: message
-    Logger.info("Event #{event_id} from #{state.uri.host} #{status}: #{reason}")
+    reason = if success, do: message, else: "with reason: " <> message
+    Logger.info("Event #{event_id} from #{state.uri.host} #{status} #{reason}")
 
     registry_dispatch(:ok, %{
       event_id: event_id,
