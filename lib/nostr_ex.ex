@@ -40,11 +40,7 @@ defmodule NostrEx do
       {:error, "Invalid URL"}
   """
   def add_relay(relay_url) do
-    case RelayManager.connect(relay_url) do
-      {:ok, _pid} = res -> res
-      {:error, _} = err -> err
-      _ -> {:error, "Couldn't add relay #{relay_url}"}
-    end
+    RelayManager.connect(relay_url)
   end
 
   @doc """

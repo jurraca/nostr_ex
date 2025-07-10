@@ -21,7 +21,7 @@ defmodule NostrEx.RelayManager do
   @doc """
   Connect to the relay with `relay_url`.
   Starts a child of the `RelayManager` supervisor as a `Socket`.
-  It will return `{:ok, {:already_started, pid}}` if a relay with that `relay_url` is already connected.
+  It will return `{:ok, pid}` if a relay with that `relay_url` is already connected.
 
   The `connect_to_relay/2` function called after successful `Socket.init` is asynchronous, and will block the caller until it completes. The handshake to set up the conn may take several seconds, and times out after 3 seconds by default.
   It is therefore recommendeded to run this function in a `Task`,
@@ -33,7 +33,7 @@ defmodule NostrEx.RelayManager do
          relay_name = Utils.name_from_host(uri.host) do
       case DynamicSupervisor.start_child(@name, {Socket, %{uri: uri, name: relay_name}}) do
         {:ok, pid} -> connect_to_relay(pid)
-        {:error, {:already_started, _pid} = msg} -> {:ok, msg}
+        {:error, {:already_started, pid}} -> {:ok, pid}
         {:error, reason} -> {:error, reason}
       end
     end
