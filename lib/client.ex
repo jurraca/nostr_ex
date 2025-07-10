@@ -169,24 +169,25 @@ defmodule NostrEx.Client do
   Sign an event with a private key and serialize it as a JSON message.
   """
   def sign_and_serialize(%Event{} = event, privkey) do
-    event
-    |> Event.sign(privkey)
-    |> Message.create_event()
-    |> Message.serialize()
+    try do
+      signed_event = Event.sign(event, privkey)
+      serialized = signed_event |> Message.create_event() |> Message.serialize()
+      {:ok, {signed_event.id, serialized}}
+    catch
+      _ -> {:error, "failed to sign event"}
+    end
   end
 
   def sign_and_serialize(_, _),
     do: {:error, "invalid event provided, must be an %Event{} struct."}
 
-  # === Private Functions ===
-
   defp do_event_send(privkey, arg, create_fun, opts) do
     with relay_names = get_relays(opts[:send_via]),
-         json_event <- create_fun.(arg, privkey) do
+         {:ok, {event_id, json_event}} <- create_fun.(arg, privkey) do
       results = Enum.map(relay_names, &send_event(&1, json_event))
 
       case Enum.all?(results, &(&1 == :ok)) do
-        true -> {:ok, :sent}
+        true -> {:ok, event_id}
         false -> {:error, Enum.filter(results, &match?(:error, &1))}
       end
     end

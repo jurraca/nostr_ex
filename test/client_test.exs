@@ -8,16 +8,20 @@ defmodule NostrEx.ClientTest do
   describe "create_note/2" do
     test "creates a valid note event message" do
       note = "Hello World!"
-      message = Client.create_note(note, @privkey)
-      assert ["EVENT", %{"kind" => 1, "content" => ^note}] = JSON.decode!(message)
+      {:ok, {event_id, message}} = Client.create_note(note, @privkey)
+
+      assert ["EVENT", %{"kind" => 1, "id" => ^event_id, "content" => ^note}] =
+               JSON.decode!(message)
     end
   end
 
   describe "create_long_form/2" do
     test "creates a valid long form event message" do
       content = "# My Long Form Post\n\nThis is a test."
-      message = Client.create_long_form(content, @privkey)
-      assert ["EVENT", %{"kind" => 30023, "content" => ^content}] = JSON.decode!(message)
+      {:ok, {event_id, message}} = Client.create_long_form(content, @privkey)
+
+      assert ["EVENT", %{"kind" => 30023, "id" => ^event_id, "content" => ^content}] =
+               JSON.decode!(message)
     end
   end
 
@@ -56,10 +60,12 @@ defmodule NostrEx.ClientTest do
   describe "sign_and_serialize/2" do
     test "signs and serializes a valid event" do
       event = Event.create(1, content: "test content")
-      result = Client.sign_and_serialize(event, @privkey)
+      {:ok, {event_id, result}} = Client.sign_and_serialize(event, @privkey)
 
       assert is_binary(result)
-      assert ["EVENT", %{"kind" => 1, "content" => "test content"}] = JSON.decode!(result)
+
+      assert ["EVENT", %{"kind" => 1, "id" => ^event_id, "content" => "test content"}] =
+               JSON.decode!(result)
     end
 
     test "returns error for invalid event" do
