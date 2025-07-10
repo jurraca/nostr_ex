@@ -209,7 +209,7 @@ defmodule NostrEx.Socket do
 
   defp establish_connection(uri) do
     http_scheme = if uri.scheme == "wss", do: :https, else: :http
-    ws_scheme = String.to_existing_atom(uri.scheme)
+    ws_scheme = String.to_atom(uri.scheme)
 
     with {:ok, conn} <- Mint.HTTP.connect(http_scheme, uri.host, uri.port, protocols: [:http1]),
          {:ok, conn, ref} <- Mint.WebSocket.upgrade(ws_scheme, conn, uri.path, []) do
