@@ -25,15 +25,6 @@ defmodule NostrEx.Client do
   # === Event Publishing ===
 
   @doc """
-  Send a serialized payload to a specific relay.
-
-  `relay` can be either a PID or a relay name registered in the RelayRegistry.
-  """
-  def send_event(relay, payload) when is_binary(payload) do
-    Socket.send_message(relay, payload)
-  end
-
-  @doc """
   Send a kind 1 note.
 
   ## Options
@@ -51,6 +42,41 @@ defmodule NostrEx.Client do
   """
   def send_long_form(text, privkey, opts \\ []) do
     do_event_send(privkey, text, &create_long_form/2, opts)
+  end
+
+  @doc """
+  Send a generic event as an `%Event{}` struct.
+
+  ## Options
+  - `:send_via` - List of relays to send the event to. Defaults to all connected relays.
+  """
+  def send_event(event, privkey, opts \\ [])
+  def send_event(%Nostr.Event{} = event, privkey, opts) do
+    with {:ok, {event_id, payload}} <- sign_and_serialize(event, privkey) do
+      {_oks, errors} =
+        opts[:send_via]
+        |> Enum.map(&send_event_serialized(&1, payload))
+        |> Enum.split_with(&match?(:ok, &1))
+
+      case errors do
+        [] -> {:ok, event_id}
+        _ -> {:error, Keyword.values(errors)}
+      end
+    else
+      {:error, _} = err -> err
+    end
+  end
+
+  def send_event(_event, _privkey, _opts),
+    do: {:error, "invalid event provided, must be an %Event{} struct."}
+
+  @doc """
+  Send a serialized payload to a specific relay.
+
+  `relay` can be either a PID or a relay name registered in the RelayRegistry.
+  """
+  def send_event_serialized(relay, payload) when is_binary(payload) do
+    Socket.send_message(relay, payload)
   end
 
   # === Subscription Management ===
@@ -90,7 +116,7 @@ defmodule NostrEx.Client do
          request = Message.close(sub_id) |> Message.serialize() do
       relays
       |> Enum.map(fn relay_name ->
-        case send_event(relay_name, request) do
+        case send_event_serialized(relay_name, request) do
           {:ok, _} -> RelayAgent.delete_subscription(relay_name, sub_id)
           err -> err
         end
@@ -159,7 +185,7 @@ defmodule NostrEx.Client do
   Subscribe to a relay with a specific subscription ID and message.
   """
   def subscribe(relay_name, sub_id, payload) when is_binary(sub_id) do
-    with :ok <- send_event(relay_name, payload),
+    with :ok <- send_event_serialized(relay_name, payload),
          :ok <- RelayAgent.update(relay_name, sub_id) do
       :ok
     end
@@ -185,12 +211,15 @@ defmodule NostrEx.Client do
 
   defp do_event_send(privkey, arg, create_fun, opts) do
     with relay_names = get_relays(opts[:send_via]),
-         {:ok, {event_id, json_event}} <- create_fun.(arg, privkey) do
-      results = Enum.map(relay_names, &send_event(&1, json_event))
+         {:ok, {event_id, serialized_event}} <- create_fun.(arg, privkey) do
+      {_oks, errors} =
+        relay_names
+        |> Enum.map(&send_event_serialized(&1, serialized_event))
+        |> Enum.split_with(&match?(:ok, &1))
 
-      case Enum.all?(results, &(&1 == :ok)) do
-        true -> {:ok, event_id}
-        false -> {:error, Enum.filter(results, &match?(:error, &1))}
+      case errors do
+        [] -> {:ok, event_id}
+        _ -> {:error, errors}
       end
     end
   end

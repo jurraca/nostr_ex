@@ -104,6 +104,13 @@ defmodule NostrEx do
   """
   def send_long_form(text, privkey, opts \\ []), do: Client.send_long_form(text, privkey, opts)
 
+  @doc """
+
+  """
+  def send_event(%Nostr.Event{} = event, privkey, opts \\ []) do
+    Client.send_event(event, privkey, opts)
+  end
+
   # === Subscriptions ===
 
   @doc """
