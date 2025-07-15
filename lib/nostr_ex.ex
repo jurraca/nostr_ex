@@ -163,7 +163,7 @@ defmodule NostrEx do
       iex> NostrEx.send_subscription([authors: [pubkey], kinds: [1]], send_via: ["relay_example_com"])
       {:ok, "subscription_id"}
   """
-  @spec send_subscription(List.t() | Keyword.t(), Keyword.t()) :: {:ok, String.t()} | {:error, String.t()}
+  @spec send_subscription([Keyword.t()] | Keyword.t(), Keyword.t()) :: {:ok, String.t()} | {:error, String.t()}
   def send_subscription(filter, opts \\ []), do: Client.send_sub(filter, opts)
 
   @doc """
