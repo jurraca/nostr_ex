@@ -51,6 +51,9 @@ defmodule NostrEx do
 
       iex> NostrEx.remove_relay("wss://relay.example.com")
       :ok
+
+      iex> NostrEx.remove_relay(:relay_example_com)
+      :ok
   """
   def remove_relay(relay_url) when is_binary(relay_url) do
     relay_url
@@ -59,6 +62,8 @@ defmodule NostrEx do
     |> NostrEx.Utils.name_from_host()
     |> Client.close_conn()
   end
+
+  def remove_relay(relay_url) when is_atom(relay_url), do: Client.close_conn(relay_url)
 
   @doc """
   Get the status of all connected relays.
