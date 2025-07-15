@@ -192,6 +192,18 @@ defmodule NostrEx.Client do
     end
   end
 
+  def sign_and_serialize(%Event{} = event, signer_pid) when is_pid(signer_pid) do
+    # Handle GenServer-based local signers
+    case NostrEx.Signer.Local.sign_event(signer_pid, event) do
+      {:ok, signed_event} ->
+        serialized = signed_event |> Message.create_event() |> Message.serialize()
+        {:ok, {signed_event.id, serialized}}
+      
+      {:error, reason} ->
+        {:error, reason}
+    end
+  end
+
   def sign_and_serialize(%Event{}, signer_or_privkey),
     do: {:error, "signer must be a binary private key or struct implementing NostrEx.Signer, got: #{inspect(signer_or_privkey)}"}
 

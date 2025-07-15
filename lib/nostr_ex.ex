@@ -258,6 +258,39 @@ defmodule NostrEx do
   @spec listen_for_subscription(binary()) :: :ok
   def listen_for_subscription(sub_id), do: Registry.register(NostrEx.PubSub, sub_id, [])
 
+  # === Signing ===
+
+  @doc """
+  Create a local signer with a private key (struct interface).
+  
+  This returns a struct that implements the NostrEx.Signer behaviour
+  and can be used directly without starting a GenServer process.
+
+  ## Examples
+
+      iex> signer = NostrEx.local_signer(private_key)
+      iex> NostrEx.send_note("Hello!", signer)
+      {:ok, :sent}
+  """
+  @spec local_signer(binary()) :: struct()
+  def local_signer(private_key), do: NostrEx.Signer.Local.new(private_key)
+  
+  @doc """
+  Start a local signer process with a private key.
+  
+  This starts a GenServer process that implements the NIP-46-like interface
+  while keeping everything local. Useful for testing or when you want the
+  same interface as remote signers but with local keys.
+
+  ## Examples
+
+      iex> {:ok, signer_pid} = NostrEx.start_local_signer(private_key)
+      iex> NostrEx.send_note("Hello!", signer_pid)
+      {:ok, :sent}
+  """
+  @spec start_local_signer(binary(), keyword()) :: {:ok, pid()} | {:error, term()}
+  def start_local_signer(private_key, opts \\ []), do: NostrEx.Signer.Local.start_link(private_key, opts)
+
   # === Remote Signing (NIP-46) ===
 
   @doc """

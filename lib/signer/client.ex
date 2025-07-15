@@ -1,5 +1,4 @@
-
-defmodule NostrEx.Signer.RemoteClient do
+defmodule NostrEx.Signer.Client do
   @moduledoc """
   NIP-46 Remote Signing client implementation.
   
@@ -35,7 +34,15 @@ defmodule NostrEx.Signer.RemoteClient do
     end
   end
   
-  ## GenServer Callbacks
+  @impl NostrEx.Signer
+  def sign_event(signer_pid, %Event{} = event) when is_pid(signer_pid) do
+    GenServer.call(signer_pid, {:sign_event, event})
+  end
+
+  @impl NostrEx.Signer
+  def get_pubkey(signer_pid) when is_pid(signer_pid) do
+    GenServer.call(signer_pid, {:get_pubkey})
+  end
   
   @impl GenServer
   def init(config) do
@@ -57,7 +64,6 @@ defmodule NostrEx.Signer.RemoteClient do
   
   @impl GenServer
   def handle_continue(:connect_to_relays, state) do
-    # Connect to all specified relays
     Enum.each(state.relays, fn relay_url ->
       RelayManager.connect(relay_url)
     end)
@@ -120,18 +126,6 @@ defmodule NostrEx.Signer.RemoteClient do
   end
   
   def handle_info(_msg, state), do: {:noreply, state}
-  
-  ## NostrEx.Signer Behaviour
-  
-  @impl NostrEx.Signer
-  def sign_event(signer_pid, %Event{} = event) when is_pid(signer_pid) do
-    GenServer.call(signer_pid, {:sign_event, event})
-  end
-  
-  @impl NostrEx.Signer
-  def get_pubkey(signer_pid) when is_pid(signer_pid) do
-    GenServer.call(signer_pid, {:get_pubkey})
-  end
   
   ## Private Functions
   
