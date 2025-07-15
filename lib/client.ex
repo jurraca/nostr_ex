@@ -196,10 +196,26 @@ defmodule NostrEx.Client do
   defp get_relays([_h | _t] = relay_list) do
     Enum.map(relay_list, fn relay ->
       cond do
-        relay in RelayManager.registered_names() -> relay
-        is_binary(relay) -> relay |> URI.parse() |> Map.get(:host) |> Utils.name_from_host()
-        is_pid(relay) and relay in RelayManager.active_pids() -> relay
-        true -> {:error, "invalid relay name, got #{relay}"}
+        relay in RelayManager.registered_names() ->
+          relay
+
+        is_pid(relay) and relay in RelayManager.active_pids() ->
+          relay
+
+        is_binary(relay) ->
+          host = relay |> URI.parse() |> Map.get(:host)
+
+          with true <- !is_nil(host),
+               atom_name = Utils.name_from_host(host),
+               true <- atom_name in RelayManager.registered_names() do
+            atom_name
+          else
+            _ ->
+              {:error, "relay not connected or invalid, got #{relay}"}
+          end
+
+        true ->
+          {:error, "invalid relay name, got #{relay}"}
       end
     end)
   end
