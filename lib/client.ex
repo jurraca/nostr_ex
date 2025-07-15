@@ -25,36 +25,19 @@ defmodule NostrEx.Client do
   # === Event Publishing ===
 
   @doc """
-  Send a kind 1 note.
-
-  ## Options
-  - `:send_via` - List of relays to send the event to. Defaults to all connected relays.
-  """
-  def send_note(note, privkey, opts \\ []) do
-    do_event_send(privkey, note, &create_note/2, opts)
-  end
-
-  @doc """
-  Send a kind 30023 long-form note.
-
-  ## Options
-  - `:send_via` - List of relays to send the event to. Defaults to all connected relays.
-  """
-  def send_long_form(text, privkey, opts \\ []) do
-    do_event_send(privkey, text, &create_long_form/2, opts)
-  end
-
-  @doc """
-  Send a generic event as an `%Event{}` struct.
+  Send an event as an `%Event{}` struct.
 
   ## Options
   - `:send_via` - List of relays to send the event to. Defaults to all connected relays.
   """
   def send_event(event, privkey, opts \\ [])
+
   def send_event(%Nostr.Event{} = event, privkey, opts) do
-    with {:ok, {event_id, payload}} <- sign_and_serialize(event, privkey) do
+    with relay_names = get_relays(opts[:send_via]),
+         true <- relay_names != [],
+         {:ok, {event_id, payload}} <- sign_and_serialize(event, privkey) do
       {_oks, errors} =
-        opts[:send_via]
+        relay_names
         |> Enum.map(&send_event_serialized(&1, payload))
         |> Enum.split_with(&match?(:ok, &1))
 
@@ -64,6 +47,7 @@ defmodule NostrEx.Client do
       end
     else
       {:error, _} = err -> err
+      false -> {:error, "no valid relays found, got: #{inspect(opts[:send_via])}"}
     end
   end
 
@@ -141,23 +125,6 @@ defmodule NostrEx.Client do
     end
   end
 
-  # === Event Creation ===
-
-  @doc """
-  Create a kind 1 event with content, signed and serialized.
-  """
-  def create_note(note, privkey) when is_binary(note) do
-    %{event: event} = Event.Note.create(note)
-    sign_and_serialize(event, privkey)
-  end
-
-  @doc """
-  Create a kind 30023 event with content, signed and serialized.
-  """
-  def create_long_form(text, privkey) do
-    Event.create(30023, content: text) |> sign_and_serialize(privkey)
-  end
-
   @doc """
   Create a subscription message with the given filters.
 
@@ -211,21 +178,6 @@ defmodule NostrEx.Client do
 
   def sign_and_serialize(_, _),
     do: {:error, "invalid event provided, must be an %Event{} struct."}
-
-  defp do_event_send(privkey, arg, create_fun, opts) do
-    with relay_names = get_relays(opts[:send_via]),
-         {:ok, {event_id, serialized_event}} <- create_fun.(arg, privkey) do
-      {_oks, errors} =
-        relay_names
-        |> Enum.map(&send_event_serialized(&1, serialized_event))
-        |> Enum.split_with(&match?(:ok, &1))
-
-      case errors do
-        [] -> {:ok, event_id}
-        _ -> {:error, errors}
-      end
-    end
-  end
 
   defp do_create_sub(filters) when is_list(filters) do
     sub_id = :crypto.strong_rand_bytes(32) |> Base.encode16(case: :lower)

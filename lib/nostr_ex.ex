@@ -25,6 +25,7 @@ defmodule NostrEx do
   """
 
   alias NostrEx.{Client, RelayAgent, RelayManager}
+  alias Nostr.Event
 
   # === Relay Management ===
 
@@ -88,7 +89,16 @@ defmodule NostrEx do
       iex> NostrEx.send_note("Hello specific relay!", private_key, send_via: ["relay_example_com"])
       {:ok, :sent}
   """
-  def send_note(note, privkey, opts \\ []), do: Client.send_note(note, privkey, opts)
+  def send_note(note, privkey, opts \\ []) do
+    case is_binary(note) do
+      true ->
+        %{event: event} = Event.Note.create(note)
+        Client.send_event(event, privkey, opts)
+
+      false ->
+        {:error, "Note must be a binary, got: #{note}"}
+    end
+  end
 
   @doc """
   Send a long-form note (kind 30023) via relays.
@@ -102,7 +112,16 @@ defmodule NostrEx do
       iex> NostrEx.send_long_form("# My Blog Post\\n\\nContent here...", private_key)
       {:ok, :sent}
   """
-  def send_long_form(text, privkey, opts \\ []), do: Client.send_long_form(text, privkey, opts)
+  def send_long_form(text, privkey, opts \\ []) do
+    case is_binary(text) do
+      true ->
+        event = Event.create(30023, content: text)
+        send_event(event, privkey, opts)
+
+      false ->
+        {:error, "Note must be a binary, got: #{text}"}
+    end
+  end
 
   @doc """
 
