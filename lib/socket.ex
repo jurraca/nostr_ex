@@ -49,6 +49,7 @@ defmodule NostrEx.Socket do
 
   ## Public API
 
+  @spec start_link(%{uri: URI.t(), name: atom()}) :: GenServer.on_start()
   def start_link(%{uri: uri, name: name}) do
     GenServer.start_link(__MODULE__, {uri, name}, name: via_tuple(name))
   end
@@ -62,6 +63,7 @@ defmodule NostrEx.Socket do
   The connection still needs to complete the handshake to be ready to receive messages,
   therefore it is recommended to check the socket's `ready?` status via `get_status/1` before sending messages.
   """
+  @spec connect(pid(), timeout()) :: {:ok, :connected} | {:error, String.t()}
   def connect(pid, timeout \\ @default_connect_timeout) do
     try do
       GenServer.call(pid, :connect, timeout)
@@ -77,6 +79,7 @@ defmodule NostrEx.Socket do
   @doc """
   Send a serialized message to the relay via the connection at this `pid`.
   """
+  @spec send_message(pid() | atom(), binary()) :: :ok | {:error, atom() | String.t()}
   def send_message(pid, text) when is_pid(pid) and is_binary(text) do
     GenServer.call(pid, {:send_text, text}, @default_call_timeout)
   end
@@ -97,6 +100,7 @@ defmodule NostrEx.Socket do
   Get the status of the current connection.
   Returns the `url`, `name`, `ready?` and `closing?` args from the state.
   """
+  @spec get_status(pid()) :: %{url: String.t(), name: atom(), ready?: boolean(), closing?: boolean()}
   def get_status(pid) do
     GenServer.call(pid, :status, @default_call_timeout)
   end
@@ -104,11 +108,13 @@ defmodule NostrEx.Socket do
   ## GenServer Callbacks
 
   @impl GenServer
+  @spec init({URI.t(), atom()}) :: {:ok, %__MODULE__{}}
   def init({uri, name}) do
     {:ok, %__MODULE__{uri: uri, name: name}}
   end
 
   @impl GenServer
+  @spec handle_call(:connect, GenServer.from(), %__MODULE__{}) :: {:noreply, %__MODULE__{}} | {:stop, :normal, {:error, String.t()}, %__MODULE__{}}
   def handle_call(:connect, from, %{uri: uri} = state) do
     case establish_connection(uri) do
       {:ok, conn, request_ref} ->
@@ -121,6 +127,7 @@ defmodule NostrEx.Socket do
   end
 
   @impl GenServer
+  @spec handle_call({:send_text, binary()}, GenServer.from(), %__MODULE__{}) :: {:reply, :ok | {:error, atom()}, %__MODULE__{}}
   def handle_call({:send_text, text}, _from, %{ready?: true} = state) do
     case send_text_frame(state, text) do
       {:ok, new_state} ->
@@ -138,12 +145,14 @@ defmodule NostrEx.Socket do
   end
 
   @impl GenServer
+  @spec handle_call(:status, GenServer.from(), %__MODULE__{}) :: {:reply, %{url: String.t(), name: atom(), ready?: boolean(), closing?: boolean()}, %__MODULE__{}}
   def handle_call(:status, _from, state) do
     status_data = build_status(state)
     {:reply, status_data, state}
   end
 
   @impl GenServer
+  @spec handle_info(term(), %__MODULE__{}) :: {:noreply, %__MODULE__{}} | {:stop, :normal, %__MODULE__{}}
   def handle_info(message, state) do
     case Mint.WebSocket.stream(state.conn, message) do
       {:ok, conn, responses} ->
@@ -168,6 +177,7 @@ defmodule NostrEx.Socket do
   end
 
   @impl GenServer
+  @spec terminate(term(), %__MODULE__{}) :: :ok
   def terminate(reason, state) do
     case reason do
       {:remote, :closed} ->
@@ -197,8 +207,10 @@ defmodule NostrEx.Socket do
 
   ## Private Functions
 
+  @spec via_tuple(atom()) :: {:via, Registry, {module(), atom()}}
   defp via_tuple(name), do: {:via, Registry, {RelayRegistry, name}}
 
+  @spec establish_connection(URI.t()) :: {:ok, Mint.HTTP.t(), reference()} | {:error, String.t()}
   defp establish_connection(uri) do
     http_scheme = if uri.scheme == "wss", do: :https, else: :http
     ws_scheme = String.to_atom(uri.scheme)
@@ -226,6 +238,7 @@ defmodule NostrEx.Socket do
     end
   end
 
+  @spec send_text_frame(%__MODULE__{}, binary()) :: {:ok, %__MODULE__{}} | {:error, atom(), %__MODULE__{}}
   defp send_text_frame(state, text) do
     case send_frame(state, {:text, text}) do
       {:ok, new_state} ->
@@ -242,6 +255,7 @@ defmodule NostrEx.Socket do
     end
   end
 
+  @spec build_status(%__MODULE__{}) :: %{url: String.t(), name: atom(), ready?: boolean(), closing?: boolean()}
   defp build_status(state) do
     %{
       url: URI.to_string(state.uri),
@@ -251,10 +265,12 @@ defmodule NostrEx.Socket do
     }
   end
 
+  @spec handle_responses(%__MODULE__{}, list()) :: %__MODULE__{}
   defp handle_responses(state, responses) do
     Enum.reduce(responses, state, &handle_response/2)
   end
 
+  @spec handle_response(tuple(), %__MODULE__{}) :: %__MODULE__{}
   defp handle_response({:status, ref, status}, %{request_ref: ref} = state) do
     %{state | status: status}
   end
@@ -294,6 +310,7 @@ defmodule NostrEx.Socket do
 
   defp handle_response(_response, state), do: state
 
+  @spec send_frame(%__MODULE__{}, tuple() | atom()) :: {:ok, %__MODULE__{}} | {:error, atom() | term()}
   defp send_frame(state, frame) do
     with {:ok, websocket, data} <- Mint.WebSocket.encode(state.websocket, frame),
          {:ok, conn} <- Mint.WebSocket.stream_request_body(state.conn, state.request_ref, data) do
@@ -310,10 +327,12 @@ defmodule NostrEx.Socket do
     end
   end
 
+  @spec handle_frames(%__MODULE__{}, list()) :: %__MODULE__{}
   defp handle_frames(state, frames) do
     Enum.reduce(frames, state, &handle_frame/2)
   end
 
+  @spec handle_frame(tuple(), %__MODULE__{}) :: %__MODULE__{}
   defp handle_frame({:ping, data}, state) do
     case send_frame(state, {:pong, data}) do
       {:ok, new_state} -> new_state
@@ -340,6 +359,7 @@ defmodule NostrEx.Socket do
     state
   end
 
+  @spec handle_nostr_message(tuple() | atom(), %__MODULE__{}) :: :ok
   defp handle_nostr_message({:event, subscription_id, _} = event, _state) do
     Logger.debug("Received event for subscription #{subscription_id}")
     registry_dispatch(subscription_id, event)
@@ -380,6 +400,7 @@ defmodule NostrEx.Socket do
     Logger.warning("Unknown message from #{state.uri.host}: #{inspect(unknown)}")
   end
 
+  @spec do_close(%__MODULE__{}) :: {:stop, :normal, %__MODULE__{}}
   defp do_close(state) do
     # Streaming a close frame may fail if the server has already closed for writing
     _ = send_frame(state, :close)
@@ -394,6 +415,7 @@ defmodule NostrEx.Socket do
     end
   end
 
+  @spec reply_to_caller(%__MODULE__{}, term()) :: %__MODULE__{}
   defp reply_to_caller(state, response) do
     case state.caller do
       nil ->
@@ -408,6 +430,7 @@ defmodule NostrEx.Socket do
   @doc """
   Send a message to a given pubsub topic
   """
+  @spec registry_dispatch(atom() | binary(), term()) :: :ok
   def registry_dispatch(sub_id, message) do
     Registry.dispatch(NostrEx.PubSub, sub_id, fn entries ->
       for {pid, _} <- entries, do: send(pid, message)
