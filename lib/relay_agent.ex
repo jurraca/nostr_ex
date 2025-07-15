@@ -39,9 +39,9 @@ defmodule NostrEx.RelayAgent do
     end)
   end
 
-  @spec get_unique_subscriptions() :: [[String.t()]]
+  @spec get_unique_subscriptions() :: [String.t()]
   def get_unique_subscriptions() do
-    Agent.get(__MODULE__, fn state -> state |> Map.values() |> Enum.uniq() end)
+    Agent.get(__MODULE__, fn state -> state |> Map.values() |> List.flatten() |> Enum.uniq() end)
   end
 
   @spec update(atom(), String.t()) :: :ok
