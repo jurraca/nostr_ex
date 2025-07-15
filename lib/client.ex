@@ -30,6 +30,7 @@ defmodule NostrEx.Client do
   ## Options
   - `:send_via` - List of relays to send the event to. Defaults to all connected relays.
   """
+  @spec send_event(Event.t(), binary(), keyword()) :: {:ok, binary()} | {:error, String.t() | [String.t()]}
   def send_event(event, privkey, opts \\ [])
 
   def send_event(%Nostr.Event{} = event, privkey, opts) do
@@ -59,6 +60,7 @@ defmodule NostrEx.Client do
 
   `relay` can be either a PID or a relay name registered in the RelayRegistry.
   """
+  @spec send_event_serialized(pid() | atom(), binary()) :: :ok | {:error, atom() | String.t()}
   def send_event_serialized(relay, payload) when is_binary(payload) do
     Socket.send_message(relay, payload)
   end
@@ -74,6 +76,7 @@ defmodule NostrEx.Client do
 
   Returns `{:ok, subscription_id}` on success.
   """
+  @spec send_sub(keyword() | [keyword()], keyword()) :: {:ok, String.t()} | {:error, String.t()}
   def send_sub(filter, opts \\ []) do
     with {:ok, sub_id, message} <- create_sub(filter),
          {:ok, _pid} <- Registry.register(NostrEx.PubSub, sub_id, nil) do
@@ -94,6 +97,7 @@ defmodule NostrEx.Client do
 
   Sends CLOSE message to all relays that know about this subscription.
   """
+  @spec close_sub(String.t()) :: {:ok, [any()]} | {:error, String.t() | [any()]}
   def close_sub(sub_id) when is_binary(sub_id) do
     with true <- sub_id in RelayAgent.get_unique_subscriptions(),
          relays <- RelayAgent.get_relays_for_sub(sub_id),
@@ -118,6 +122,7 @@ defmodule NostrEx.Client do
   @doc """
   Close a connection to a relay by name.
   """
+  @spec close_conn(atom()) :: :ok | {:error, :not_found}
   def close_conn(relay_name) do
     case Registry.lookup(NostrEx.RelayRegistry, relay_name) do
       [{pid, _}] -> DynamicSupervisor.terminate_child(RelayManager, pid)
@@ -130,6 +135,7 @@ defmodule NostrEx.Client do
 
   Returns `{:ok, subscription_id, serialized_message}`.
   """
+  @spec create_sub(keyword() | [keyword()]) :: {:ok, String.t(), binary()} | {:error, String.t()}
   def create_sub(opts) do
     cond do
       # Single filter as keyword list
@@ -151,6 +157,7 @@ defmodule NostrEx.Client do
   @doc """
   Subscribe to a relay with a specific subscription ID and message.
   """
+  @spec subscribe(atom(), String.t(), binary()) :: :ok | {:error, String.t()}
   def subscribe(relay_name, sub_id, payload) when is_binary(sub_id) do
     with :ok <- send_event_serialized(relay_name, payload),
          :ok <- RelayAgent.update(relay_name, sub_id) do
@@ -163,6 +170,7 @@ defmodule NostrEx.Client do
   @doc """
   Sign an event with a private key and serialize it as a JSON message.
   """
+  @spec sign_and_serialize(Event.t(), binary()) :: {:ok, {binary(), binary()}} | {:error, String.t()}
   def sign_and_serialize(%Event{} = event, privkey) when is_binary(privkey) do
     try do
       signed_event = Event.sign(event, privkey)
@@ -179,6 +187,7 @@ defmodule NostrEx.Client do
   def sign_and_serialize(_, _),
     do: {:error, "invalid event provided, must be an %Event{} struct."}
 
+  @spec do_create_sub([Filter.t()]) :: {:ok, String.t(), binary()}
   defp do_create_sub(filters) when is_list(filters) do
     sub_id = :crypto.strong_rand_bytes(32) |> Base.encode16(case: :lower)
 
@@ -190,6 +199,7 @@ defmodule NostrEx.Client do
     {:ok, sub_id, msg}
   end
 
+  @spec get_relays(nil | :all | [atom() | pid() | String.t()]) :: [atom() | pid() | {:error, String.t()}]
   defp get_relays(nil), do: get_relays(:all)
   defp get_relays(:all), do: RelayManager.registered_names()
 
