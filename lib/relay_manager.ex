@@ -1,7 +1,19 @@
 defmodule NostrEx.RelayManager do
   @moduledoc """
   A Dynamic Supervisor which supervises connections to relays.
-  This module provides a few functions to faciliate getting the status of individual websocket conns.
+
+  Nostr clients typically connect to multiple relays.
+  When you `connect/1` to a relay, a child of this Supervisor is started, implemented by `NostrEx.Socket`.
+  This process can be referenced by its `pid` or by the name it is registered under in the `Registry`.
+  By default the registered name is the relay URL host with periods replaced by underscores `_`, e.g. "relay_example_com".
+  Currently connected relays can be queried with:
+  - `active_pids/0`: returns a list of this supervisor's children PIDs
+  - `registered_names/0`: returns a list of Registry names for currently connected relay `pid`s.
+  - `lookup/1`: takes a registered name, returns its `pid`
+  - `get_states/0`: returns the `Socket.get_status/1` for each relay, which includes the URL and registered name
+  - `relays/0`: a convenience for `DynamicSupervisor.which_children(Socket)`
+
+  `Socket` functions only take a `pid` or a registered name to identify a relay.
   """
 
   use DynamicSupervisor
