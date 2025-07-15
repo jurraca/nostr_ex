@@ -30,13 +30,13 @@ defmodule NostrEx.Client do
   ## Options
   - `:send_via` - List of relays to send the event to. Defaults to all connected relays.
   """
-  @spec send_event(Event.t(), binary(), keyword()) :: {:ok, binary()} | {:error, String.t() | [String.t()]}
-  def send_event(event, privkey, opts \\ [])
+  @spec send_event(Event.t(), binary() | struct(), keyword()) :: {:ok, binary()} | {:error, String.t() | [String.t()]}
+  def send_event(event, signer_or_privkey, opts \\ [])
 
-  def send_event(%Nostr.Event{} = event, privkey, opts) do
+  def send_event(%Nostr.Event{} = event, signer_or_privkey, opts) do
     with relay_names = get_relays(opts[:send_via]),
          true <- relay_names != [],
-         {:ok, {event_id, payload}} <- sign_and_serialize(event, privkey) do
+         {:ok, {event_id, payload}} <- sign_and_serialize(event, signer_or_privkey) do
       {_oks, errors} =
         relay_names
         |> Enum.map(&send_event_serialized(&1, payload))
@@ -52,7 +52,7 @@ defmodule NostrEx.Client do
     end
   end
 
-  def send_event(_event, _privkey, _opts),
+  def send_event(_event, _signer_or_privkey, _opts),
     do: {:error, "invalid event provided, must be an %Event{} struct."}
 
   @doc """
@@ -168,9 +168,9 @@ defmodule NostrEx.Client do
   def subscribe(_, sub_id, _), do: {:error, "invalid sub_id format, got #{sub_id}"}
 
   @doc """
-  Sign an event with a private key and serialize it as a JSON message.
+  Sign an event with a private key or signer and serialize it as a JSON message.
   """
-  @spec sign_and_serialize(Event.t(), binary()) :: {:ok, {binary(), binary()}} | {:error, String.t()}
+  @spec sign_and_serialize(Event.t(), binary() | struct()) :: {:ok, {binary(), binary()}} | {:error, String.t()}
   def sign_and_serialize(%Event{} = event, privkey) when is_binary(privkey) do
     try do
       signed_event = Event.sign(event, privkey)
@@ -181,8 +181,19 @@ defmodule NostrEx.Client do
     end
   end
 
-  def sign_and_serialize(%Event{}, privkey),
-    do: {:error, "private key provided is not a binary, got: #{privkey}"}
+  def sign_and_serialize(%Event{} = event, signer) when is_struct(signer) do
+    case NostrEx.Signer.sign_event(signer, event) do
+      {:ok, signed_event} ->
+        serialized = signed_event |> Message.create_event() |> Message.serialize()
+        {:ok, {signed_event.id, serialized}}
+      
+      {:error, reason} ->
+        {:error, reason}
+    end
+  end
+
+  def sign_and_serialize(%Event{}, signer_or_privkey),
+    do: {:error, "signer must be a binary private key or struct implementing NostrEx.Signer, got: #{inspect(signer_or_privkey)}"}
 
   def sign_and_serialize(_, _),
     do: {:error, "invalid event provided, must be an %Event{} struct."}

@@ -93,15 +93,19 @@ defmodule NostrEx do
       iex> NostrEx.send_note("Hello Nostr!", private_key)
       {:ok, :sent}
 
+      iex> signer = NostrEx.Signer.PrivateKey.new(private_key)
+      iex> NostrEx.send_note("Hello Nostr!", signer)
+      {:ok, :sent}
+
       iex> NostrEx.send_note("Hello specific relay!", private_key, send_via: ["relay_example_com"])
       {:ok, :sent}
   """
-  @spec send_note(binary(), binary(), Keyword.t()) :: {:ok, :sent} | {:error, String.t()}
-  def send_note(note, privkey, opts \\ []) do
+  @spec send_note(binary(), binary() | struct(), Keyword.t()) :: {:ok, :sent} | {:error, String.t()}
+  def send_note(note, signer_or_privkey, opts \\ []) do
     case is_binary(note) do
       true ->
         %{event: event} = Event.Note.create(note)
-        Client.send_event(event, privkey, opts)
+        Client.send_event(event, signer_or_privkey, opts)
 
       false ->
         {:error, "Note must be a binary, got: #{note}"}
@@ -119,13 +123,17 @@ defmodule NostrEx do
 
       iex> NostrEx.send_long_form("# My Blog Post\\n\\nContent here...", private_key)
       {:ok, :sent}
+
+      iex> signer = NostrEx.Signer.PrivateKey.new(private_key)
+      iex> NostrEx.send_long_form("# My Blog Post\\n\\nContent here...", signer)
+      {:ok, :sent}
   """
-  @spec send_note(binary(), binary(), Keyword.t()) :: {:ok, :sent} | {:error, String.t()}
-  def send_long_form(text, privkey, opts \\ []) do
+  @spec send_long_form(binary(), binary() | struct(), Keyword.t()) :: {:ok, :sent} | {:error, String.t()}
+  def send_long_form(text, signer_or_privkey, opts \\ []) do
     case is_binary(text) do
       true ->
         event = Event.create(30023, content: text)
-        send_event(event, privkey, opts)
+        send_event(event, signer_or_privkey, opts)
 
       false ->
         {:error, "Note must be a binary, got: #{text}"}
@@ -143,10 +151,14 @@ defmodule NostrEx do
 
       iex> NostrEx.send_event(%Event{kind: 1, content: "gm"}, privkey)
       {:ok, :sent}
+
+      iex> signer = NostrEx.Signer.PrivateKey.new(privkey)
+      iex> NostrEx.send_event(%Event{kind: 1, content: "gm"}, signer)
+      {:ok, :sent}
   """
-  @spec send_event(Event.t(), binary(), Keyword.t()) :: {:ok, :sent} | {:error, String.t()}
-  def send_event(%Nostr.Event{} = event, privkey, opts \\ []) do
-    Client.send_event(event, privkey, opts)
+  @spec send_event(Event.t(), binary() | struct(), Keyword.t()) :: {:ok, :sent} | {:error, String.t()}
+  def send_event(%Nostr.Event{} = event, signer_or_privkey, opts \\ []) do
+    Client.send_event(event, signer_or_privkey, opts)
   end
 
   # === Subscriptions ===
@@ -245,6 +257,49 @@ defmodule NostrEx do
   """
   @spec listen_for_subscription(binary()) :: :ok
   def listen_for_subscription(sub_id), do: Registry.register(NostrEx.PubSub, sub_id, [])
+
+  # === Remote Signing (NIP-46) ===
+
+  @doc """
+  Connect to a remote signer using a bunker:// URI.
+
+  ## Examples
+
+      iex> {:ok, signer} = NostrEx.connect_remote_signer("bunker://pubkey?relay=wss://relay.example.com&secret=abc123")
+      iex> NostrEx.send_note("Hello from remote signer!", signer)
+      {:ok, :sent}
+  """
+  @spec connect_remote_signer(String.t(), keyword()) :: {:ok, pid()} | {:error, String.t()}
+  def connect_remote_signer(bunker_uri, opts \\ []) do
+    NostrEx.Signer.RemoteClient.start_link(bunker_uri, opts)
+  end
+
+  @doc """
+  Start a remote signing service.
+
+  This allows your application to act as a remote signer for other clients.
+
+  ## Examples
+
+      iex> {:ok, _signer_pid} = NostrEx.start_remote_signer(private_key, ["wss://relay.example.com"])
+  """
+  @spec start_remote_signer(binary(), [String.t()], keyword()) :: {:ok, pid()} | {:error, term()}
+  def start_remote_signer(private_key, relay_urls, opts \\ []) do
+    NostrEx.Signer.RemoteService.start_link(private_key, relay_urls, opts)
+  end
+
+  @doc """
+  Generate a nostrconnect:// URI for client-initiated remote signing connections.
+
+  ## Examples
+
+      iex> NostrEx.generate_connect_uri(client_pubkey, ["wss://relay.example.com"], name: "My App")
+      "nostrconnect://pubkey?relay=wss%3A%2F%2Frelay.example.com&secret=abc123&name=My+App"
+  """
+  @spec generate_connect_uri(binary(), [String.t()], keyword()) :: String.t()
+  def generate_connect_uri(client_pubkey, relay_urls, opts \\ []) do
+    NostrEx.Signer.RemoteService.generate_connect_uri(client_pubkey, relay_urls, opts)
+  end
 
   # === Utility Functions ===
 
