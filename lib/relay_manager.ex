@@ -41,7 +41,7 @@ defmodule NostrEx.RelayManager do
 
   defp connect_to_relay(pid, timeout \\ 3_000) do
     case Socket.connect(pid) do
-      :ok ->
+      {:ok, :connected} ->
         wait_for_ready(pid, 500, timeout)
 
       {:error, reason} ->
