@@ -21,11 +21,13 @@ defmodule NostrEx.RelayManager do
 
   @name RelaySupervisor
 
+  @spec start_link(keyword()) :: GenServer.on_start()
   def start_link(opts) do
     DynamicSupervisor.start_link(opts)
   end
 
   @impl true
+  @spec init(keyword()) :: {:ok, DynamicSupervisor.sup_flags()}
   def init(opts) do
     DynamicSupervisor.init(opts)
   end
@@ -40,6 +42,7 @@ defmodule NostrEx.RelayManager do
   in particular when connecting to multiple relays.
   Note that the return value is not necessarily needed, since you can call `Socket.get_status/1` to see if the connection is ready to send or receive messages.
   """
+  @spec connect(String.t()) :: {:ok, pid()} | {:error, String.t() | term()}
   def connect(relay_url) do
     with {:ok, uri} <- parse_url(relay_url),
          relay_name = Utils.name_from_host(uri.host) do
@@ -51,6 +54,7 @@ defmodule NostrEx.RelayManager do
     end
   end
 
+  @spec connect_to_relay(pid(), timeout()) :: {:ok, pid()} | {:error, String.t() | term()}
   defp connect_to_relay(pid, timeout \\ 3_000) do
     case Socket.connect(pid) do
       {:ok, :connected} ->
@@ -62,6 +66,7 @@ defmodule NostrEx.RelayManager do
     end
   end
 
+  @spec wait_for_ready(pid(), pos_integer(), timeout(), non_neg_integer()) :: {:ok, pid()} | {:error, :not_ready}
   def wait_for_ready(pid, interval, timeout, elapsed_time \\ 0) do
     if elapsed_time >= timeout do
       {:error, :not_ready}
@@ -75,6 +80,7 @@ defmodule NostrEx.RelayManager do
     end
   end
 
+  @spec ready?(pid() | atom()) :: boolean() | {:error, :not_found}
   def ready?(pid) when is_pid(pid), do: Socket.get_status(pid) |> Map.get(:ready?)
 
   def ready?(relay_name) do
@@ -84,6 +90,7 @@ defmodule NostrEx.RelayManager do
     end
   end
 
+  @spec disconnect(pid() | String.t() | atom()) :: :ok | {:error, term()}
   def disconnect(pid) when is_pid(pid) do
     DynamicSupervisor.terminate_child(@name, pid)
   end
@@ -99,22 +106,27 @@ defmodule NostrEx.RelayManager do
     end
   end
 
+  @spec relays() :: [{:undefined, pid(), :worker, [module()]}]
   def relays(), do: DynamicSupervisor.which_children(@name)
 
+  @spec active_pids() :: [pid()]
   def active_pids() do
     @name
     |> DynamicSupervisor.which_children()
     |> Enum.map(&get_pid/1)
   end
 
+  @spec get_states() :: [%{url: String.t(), name: atom(), ready?: boolean(), closing?: boolean()}]
   def get_states() do
     active_pids() |> Enum.map(fn pid -> Socket.get_status(pid) end)
   end
 
+  @spec registered_names() :: [atom()]
   def registered_names() do
     Registry.select(RelayRegistry, [{{:"$1", :_, :_}, [], [:"$1"]}]) |> Enum.sort()
   end
 
+  @spec lookup(atom()) :: {:ok, pid()} | {:error, :not_found}
   def lookup(name) do
     case Registry.lookup(RelayRegistry, name) do
       [{pid, _}] -> {:ok, pid}
@@ -122,6 +134,7 @@ defmodule NostrEx.RelayManager do
     end
   end
 
+  @spec parse_url(String.t()) :: {:ok, URI.t()} | {:error, String.t()}
   defp parse_url("http" <> _rest = url) do
     reason = "The relay URL must be a websocket, not an HTTP URL, got: #{url}"
     {:error, reason}
@@ -140,6 +153,7 @@ defmodule NostrEx.RelayManager do
     end
   end
 
+  @spec get_pid({:undefined, pid(), :worker, [module()]} | term()) :: pid() | nil
   defp get_pid({:undefined, pid, :worker, [Socket]}), do: pid
   defp get_pid(_), do: nil
 end
