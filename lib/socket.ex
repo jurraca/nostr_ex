@@ -17,8 +17,8 @@ defmodule NostrEx.Socket do
   ```
 
   The `send_message/2` function sends a message over the websocket, and does not expect a response.
-  It is a `call`, and will return `:ok` if the socket was in a ready state and successfully sent the message, and `:error` otherwise.
-  Responses will be sent via the websocket as Nostr messages.
+  It is a `call`, and will return `:ok` if the socket was in a ready state and successfully sent the message, and an `{:error, reason}` tuple otherwise.
+  Responses will be sent via the websocket as Nostr messages, for example an `["OK", <event_id>, <true|false>, <message>]` upon successful receipt by the relay.
 
   Before terminating, the process will update the `RelayAgent` to delete subscription info associated with this relay.
   """
@@ -416,14 +416,8 @@ defmodule NostrEx.Socket do
   @doc """
   Send a message to a given pubsub topic
   """
-  def registry_dispatch(sub_id, message) when is_binary(sub_id) do
+  def registry_dispatch(sub_id, message) do
     Registry.dispatch(NostrEx.PubSub, sub_id, fn entries ->
-      for {pid, _} <- entries, do: send(pid, message)
-    end)
-  end
-
-  def registry_dispatch(key, message) do
-    Registry.dispatch(NostrEx.PubSub, key, fn entries ->
       for {pid, _} <- entries, do: send(pid, message)
     end)
   end

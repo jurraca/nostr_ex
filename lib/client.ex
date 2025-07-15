@@ -196,7 +196,7 @@ defmodule NostrEx.Client do
   @doc """
   Sign an event with a private key and serialize it as a JSON message.
   """
-  def sign_and_serialize(%Event{} = event, privkey) do
+  def sign_and_serialize(%Event{} = event, privkey) when is_binary(privkey) do
     try do
       signed_event = Event.sign(event, privkey)
       serialized = signed_event |> Message.create_event() |> Message.serialize()
@@ -205,6 +205,9 @@ defmodule NostrEx.Client do
       _ -> {:error, "failed to sign event"}
     end
   end
+
+  def sign_and_serialize(%Event{}, privkey),
+    do: {:error, "private key provided is not a binary, got: #{privkey}"}
 
   def sign_and_serialize(_, _),
     do: {:error, "invalid event provided, must be an %Event{} struct."}
