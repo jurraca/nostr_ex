@@ -1,10 +1,11 @@
 defmodule NostrEx.MixProject do
   use Mix.Project
 
+  @version "0.1.0"
   def project do
     [
       app: :nostr_ex,
-      version: "0.1.0",
+      version: @version,
       elixir: "~> 1.16",
       start_permanent: Mix.env() == :prod,
       deps: deps(),
@@ -29,10 +30,12 @@ defmodule NostrEx.MixProject do
   defp docs do
     [
       authors: ["jurraca <julienu@pm.me>"],
-      main: "overview",
+      main: "NostrEx",
       api_reference: false,
       formatters: ["html"],
-      source_url: "https://github.com/jurraca/nostr_ex"
+      source_ref: "v#{@version}",
+      source_url: "https://github.com/jurraca/nostr_ex",
+      extras: ["README.md"]
     ]
   end
 
