@@ -88,17 +88,9 @@ defmodule NostrEx.Socket do
     end
   end
 
-  def send_message(relay_name, text) when is_binary(relay_name) and is_binary(text) do
-    relay_name
-    |> String.to_existing_atom()
-    |> send_message(text)
-  rescue
-    ArgumentError -> {:error, "relay not found: #{relay_name}"}
-  end
-
   def send_message(relay_name, _text) do
     {:error,
-     "invalid relay_name format, expected atom, binary, or pid, got: #{inspect(relay_name)}"}
+     "invalid relay_name format, expected a registered atom or a pid, got: #{inspect(relay_name)}"}
   end
 
   @doc """
