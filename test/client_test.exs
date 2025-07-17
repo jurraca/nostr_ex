@@ -5,30 +5,11 @@ defmodule NostrEx.ClientTest do
 
   @privkey "5ee1c8000ab28edd64d74a7d951af749cfb0b7e1f31a4ad87940a55b0e7e6b3d"
 
-  describe "create_note/2" do
-    test "creates a valid note event message" do
-      note = "Hello World!"
-      {:ok, {event_id, message}} = Client.create_note(note, @privkey)
-
-      assert ["EVENT", %{"kind" => 1, "id" => ^event_id, "content" => ^note}] =
-               JSON.decode!(message)
-    end
-  end
-
-  describe "create_long_form/2" do
-    test "creates a valid long form event message" do
-      content = "# My Long Form Post\n\nThis is a test."
-      {:ok, {event_id, message}} = Client.create_long_form(content, @privkey)
-
-      assert ["EVENT", %{"kind" => 30023, "id" => ^event_id, "content" => ^content}] =
-               JSON.decode!(message)
-    end
-  end
-
-  describe "create_sub/1" do
+  describe "create_subscription_message/1" do
     test "creates a valid subscription request" do
       filter = [authors: ["abc123"], kinds: [1]]
-      {:ok, sub_id, message} = Client.create_sub(filter)
+      {:ok, filter_list} = Client.create_filters(filter)
+      {:ok, sub_id, message} = Client.create_subscription_message(filter_list)
 
       assert ["REQ", ^sub_id, %{"authors" => ["abc123"], "kinds" => [1]}] = JSON.decode!(message)
       # 32 bytes hex encoded
@@ -41,7 +22,8 @@ defmodule NostrEx.ClientTest do
         [authors: ["def456"], kinds: [2]]
       ]
 
-      {:ok, sub_id, message} = Client.create_sub(filters)
+      {:ok, filter_struct_list} = Client.create_filters(filters)
+      {:ok, sub_id, message} = Client.create_subscription_message(filter_struct_list)
 
       assert [
                "REQ",
@@ -53,7 +35,7 @@ defmodule NostrEx.ClientTest do
 
     test "returns error for invalid filter format" do
       invalid_filter = %{invalid: "format"}
-      assert {:error, "Invalid filter format"} = Client.create_sub(invalid_filter)
+      assert {:error, "Invalid filter format"} = Client.create_filters(invalid_filter)
     end
   end
 

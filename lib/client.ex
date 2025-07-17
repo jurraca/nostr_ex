@@ -78,7 +78,8 @@ defmodule NostrEx.Client do
   """
   @spec send_sub(keyword() | [keyword()], keyword()) :: {:ok, String.t()} | {:error, String.t()}
   def send_sub(filter, opts \\ []) do
-    with {:ok, sub_id, message} <- create_sub(filter),
+    with {:ok, filters} <- create_filters(filter),
+         {:ok, sub_id, message} <- create_subscription_message(filters),
          {:ok, _pid} <- Registry.register(NostrEx.PubSub, sub_id, nil) do
       opts[:send_via]
       |> get_relays()
@@ -131,27 +132,52 @@ defmodule NostrEx.Client do
   end
 
   @doc """
+  Create filters from keyword list(s).
+
+  Returns `{:ok, [Filter.t()]}` on success.
+  """
+  @spec create_filters(keyword() | [keyword()]) :: {:ok, [Filter.t()]} | {:error, String.t()}
+  def create_filters(opts) when is_list(opts) do
+    case opts do
+      [] ->
+        {:ok, []}
+
+      [{_key, _value} | _] ->
+        filter = Map.merge(%Filter{}, Enum.into(opts, %{}))
+        {:ok, [filter]}
+
+      filters when is_list(hd(filters)) ->
+        case Enum.all?(filters, &Keyword.keyword?/1) do
+          true ->
+            processed_filters = Enum.map(filters, &Map.merge(%Filter{}, Enum.into(&1, %{})))
+            {:ok, processed_filters}
+
+          false ->
+            {:error, "Invalid filter format - all elements must be keyword lists"}
+        end
+
+      _ ->
+        {:error, "Invalid filter format"}
+    end
+  end
+
+  def create_filters(_opts), do: {:error, "Invalid filter format"}
+
+  @doc """
   Create a subscription message with the given filters.
 
   Returns `{:ok, subscription_id, serialized_message}`.
   """
-  @spec create_sub(keyword() | [keyword()]) :: {:ok, String.t(), binary()} | {:error, String.t()}
-  def create_sub(opts) do
-    cond do
-      # Single filter as keyword list
-      Keyword.keyword?(opts) ->
-        filter = Map.merge(%Filter{}, Enum.into(opts, %{}))
-        do_create_sub([filter])
+  @spec create_subscription_message([Filter.t()]) :: {:ok, String.t(), binary()}
+  def create_subscription_message(filters) when is_list(filters) do
+    sub_id = :crypto.strong_rand_bytes(32) |> Base.encode16(case: :lower)
 
-      # Multiple filters as list of keyword lists
-      Enum.all?(opts, &Keyword.keyword?/1) ->
-        opts
-        |> Enum.map(&Map.merge(%Filter{}, Enum.into(&1, %{})))
-        |> do_create_sub()
+    msg =
+      filters
+      |> Message.request(sub_id)
+      |> Message.serialize()
 
-      true ->
-        {:error, "Invalid filter format"}
-    end
+    {:ok, sub_id, msg}
   end
 
   @doc """
@@ -186,18 +212,6 @@ defmodule NostrEx.Client do
 
   def sign_and_serialize(_, _),
     do: {:error, "invalid event provided, must be an %Event{} struct."}
-
-  @spec do_create_sub([Filter.t()]) :: {:ok, String.t(), binary()}
-  defp do_create_sub(filters) when is_list(filters) do
-    sub_id = :crypto.strong_rand_bytes(32) |> Base.encode16(case: :lower)
-
-    msg =
-      filters
-      |> Message.request(sub_id)
-      |> Message.serialize()
-
-    {:ok, sub_id, msg}
-  end
 
   @spec get_relays(nil | :all | [atom() | pid() | String.t()]) :: [atom() | pid() | {:error, String.t()}]
   defp get_relays(nil), do: get_relays(:all)
