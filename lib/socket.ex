@@ -100,7 +100,12 @@ defmodule NostrEx.Socket do
   Get the status of the current connection.
   Returns the `url`, `name`, `ready?` and `closing?` args from the state.
   """
-  @spec get_status(pid()) :: %{url: String.t(), name: atom(), ready?: boolean(), closing?: boolean()}
+  @spec get_status(pid()) :: %{
+          url: String.t(),
+          name: atom(),
+          ready?: boolean(),
+          closing?: boolean()
+        }
   def get_status(pid) do
     GenServer.call(pid, :status, @default_call_timeout)
   end
@@ -114,7 +119,8 @@ defmodule NostrEx.Socket do
   end
 
   @impl GenServer
-  @spec handle_call(:connect, GenServer.from(), %__MODULE__{}) :: {:noreply, %__MODULE__{}} | {:stop, :normal, {:error, String.t()}, %__MODULE__{}}
+  @spec handle_call(:connect, GenServer.from(), %__MODULE__{}) ::
+          {:noreply, %__MODULE__{}} | {:stop, :normal, {:error, String.t()}, %__MODULE__{}}
   def handle_call(:connect, from, %{uri: uri} = state) do
     case establish_connection(uri) do
       {:ok, conn, request_ref} ->
@@ -127,7 +133,8 @@ defmodule NostrEx.Socket do
   end
 
   @impl GenServer
-  @spec handle_call({:send_text, binary()}, GenServer.from(), %__MODULE__{}) :: {:reply, :ok | {:error, atom()}, %__MODULE__{}}
+  @spec handle_call({:send_text, binary()}, GenServer.from(), %__MODULE__{}) ::
+          {:reply, :ok | {:error, atom()}, %__MODULE__{}}
   def handle_call({:send_text, text}, _from, %{ready?: true} = state) do
     case send_text_frame(state, text) do
       {:ok, new_state} ->
@@ -145,14 +152,17 @@ defmodule NostrEx.Socket do
   end
 
   @impl GenServer
-  @spec handle_call(:status, GenServer.from(), %__MODULE__{}) :: {:reply, %{url: String.t(), name: atom(), ready?: boolean(), closing?: boolean()}, %__MODULE__{}}
+  @spec handle_call(:status, GenServer.from(), %__MODULE__{}) ::
+          {:reply, %{url: String.t(), name: atom(), ready?: boolean(), closing?: boolean()},
+           %__MODULE__{}}
   def handle_call(:status, _from, state) do
     status_data = build_status(state)
     {:reply, status_data, state}
   end
 
   @impl GenServer
-  @spec handle_info(term(), %__MODULE__{}) :: {:noreply, %__MODULE__{}} | {:stop, :normal, %__MODULE__{}}
+  @spec handle_info(term(), %__MODULE__{}) ::
+          {:noreply, %__MODULE__{}} | {:stop, :normal, %__MODULE__{}}
   def handle_info(message, state) do
     case Mint.WebSocket.stream(state.conn, message) do
       {:ok, conn, responses} ->
@@ -165,6 +175,10 @@ defmodule NostrEx.Socket do
         else
           {:noreply, new_state}
         end
+
+      {:error, _conn, %Mint.TransportError{reason: :closed}, _responses} ->
+        new_state = %{state | closing?: true, ready?: false}
+        terminate({:remote, :closed}, new_state)
 
       {:error, conn, reason, _responses} ->
         Logger.error("WebSocket stream error: #{inspect(reason)}")
@@ -200,9 +214,9 @@ defmodule NostrEx.Socket do
               _ = send_message(state.name, close_message)
             end)
         end
-
-        RelayAgent.delete_relay(state.name)
     end
+
+    RelayAgent.delete_relay(state.name)
   end
 
   ## Private Functions
@@ -238,7 +252,8 @@ defmodule NostrEx.Socket do
     end
   end
 
-  @spec send_text_frame(%__MODULE__{}, binary()) :: {:ok, %__MODULE__{}} | {:error, atom(), %__MODULE__{}}
+  @spec send_text_frame(%__MODULE__{}, binary()) ::
+          {:ok, %__MODULE__{}} | {:error, atom(), %__MODULE__{}}
   defp send_text_frame(state, text) do
     case send_frame(state, {:text, text}) do
       {:ok, new_state} ->
@@ -255,7 +270,12 @@ defmodule NostrEx.Socket do
     end
   end
 
-  @spec build_status(%__MODULE__{}) :: %{url: String.t(), name: atom(), ready?: boolean(), closing?: boolean()}
+  @spec build_status(%__MODULE__{}) :: %{
+          url: String.t(),
+          name: atom(),
+          ready?: boolean(),
+          closing?: boolean()
+        }
   defp build_status(state) do
     %{
       url: URI.to_string(state.uri),
@@ -310,7 +330,8 @@ defmodule NostrEx.Socket do
 
   defp handle_response(_response, state), do: state
 
-  @spec send_frame(%__MODULE__{}, tuple() | atom()) :: {:ok, %__MODULE__{}} | {:error, atom() | term()}
+  @spec send_frame(%__MODULE__{}, tuple() | atom()) ::
+          {:ok, %__MODULE__{}} | {:error, atom() | term()}
   defp send_frame(state, frame) do
     with {:ok, websocket, data} <- Mint.WebSocket.encode(state.websocket, frame),
          {:ok, conn} <- Mint.WebSocket.stream_request_body(state.conn, state.request_ref, data) do
