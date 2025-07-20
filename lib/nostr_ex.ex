@@ -93,15 +93,19 @@ defmodule NostrEx do
       iex> NostrEx.send_note("Hello Nostr!", private_key)
       {:ok, :sent}
 
+      iex> signer = NostrEx.Signer.PrivateKey.new(private_key)
+      iex> NostrEx.send_note("Hello Nostr!", signer)
+      {:ok, :sent}
+
       iex> NostrEx.send_note("Hello specific relay!", private_key, send_via: ["relay_example_com"])
       {:ok, :sent}
   """
-  @spec send_note(binary(), binary(), Keyword.t()) :: {:ok, :sent} | {:error, String.t()}
-  def send_note(note, privkey, opts \\ []) do
+  @spec send_note(binary(), binary() | struct(), Keyword.t()) :: {:ok, :sent} | {:error, String.t()}
+  def send_note(note, signer_or_privkey, opts \\ []) do
     case is_binary(note) do
       true ->
         %{event: event} = Event.Note.create(note)
-        Client.send_event(event, privkey, opts)
+        Client.send_event(event, signer_or_privkey, opts)
 
       false ->
         {:error, "Note must be a binary, got: #{note}"}
@@ -119,13 +123,17 @@ defmodule NostrEx do
 
       iex> NostrEx.send_long_form("# My Blog Post\\n\\nContent here...", private_key)
       {:ok, :sent}
+
+      iex> signer = NostrEx.Signer.PrivateKey.new(private_key)
+      iex> NostrEx.send_long_form("# My Blog Post\\n\\nContent here...", signer)
+      {:ok, :sent}
   """
-  @spec send_note(binary(), binary(), Keyword.t()) :: {:ok, :sent} | {:error, String.t()}
-  def send_long_form(text, privkey, opts \\ []) do
+  @spec send_long_form(binary(), binary() | struct(), Keyword.t()) :: {:ok, :sent} | {:error, String.t()}
+  def send_long_form(text, signer_or_privkey, opts \\ []) do
     case is_binary(text) do
       true ->
         event = Event.create(30023, content: text)
-        send_event(event, privkey, opts)
+        send_event(event, signer_or_privkey, opts)
 
       false ->
         {:error, "Note must be a binary, got: #{text}"}
@@ -143,10 +151,14 @@ defmodule NostrEx do
 
       iex> NostrEx.send_event(%Event{kind: 1, content: "gm"}, privkey)
       {:ok, :sent}
+
+      iex> signer = NostrEx.Signer.PrivateKey.new(privkey)
+      iex> NostrEx.send_event(%Event{kind: 1, content: "gm"}, signer)
+      {:ok, :sent}
   """
-  @spec send_event(Event.t(), binary(), Keyword.t()) :: {:ok, :sent} | {:error, String.t()}
-  def send_event(%Nostr.Event{} = event, privkey, opts \\ []) do
-    Client.send_event(event, privkey, opts)
+  @spec send_event(Event.t(), binary() | struct(), Keyword.t()) :: {:ok, :sent} | {:error, String.t()}
+  def send_event(%Nostr.Event{} = event, signer_or_privkey, opts \\ []) do
+    Client.send_event(event, signer_or_privkey, opts)
   end
 
   # === Subscriptions ===
