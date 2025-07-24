@@ -114,14 +114,14 @@ defmodule NostrEx do
   ## Examples
 
       iex> NostrEx.send_note("Hello Nostr!", private_key)
-      {:ok, :sent}
+      {:ok, "abcd1231f..."}
 
       iex> signer = NostrEx.Signer.PrivateKey.new(private_key)
       iex> NostrEx.send_note("Hello Nostr!", signer)
-      {:ok, :sent}
+      {:ok, "abcd1231f..."}
 
       iex> NostrEx.send_note("Hello specific relay!", private_key, send_via: ["relay_example_com"])
-      {:ok, :sent}
+      {:ok, "abcd1231f..."}
   """
   @spec send_note(binary(), binary() | struct(), Keyword.t()) :: {:ok, :sent} | {:error, String.t()}
   def send_note(note, signer_or_privkey, opts \\ []) do
