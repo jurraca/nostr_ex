@@ -79,6 +79,29 @@ defmodule NostrEx do
   """
   def connected_relays, do: RelayManager.registered_names()
 
+  @doc """
+  Create event from `attrs`.
+
+  `attrs` can be a map with atom keys or a keyword list, and must at minimum contain a `kind` attribute.
+  """
+  def create_event(%{kind: kind} = attrs) do
+    if kind do
+      Event.create(kind, Enum.into(attrs, []))
+    else
+      {:error, "event kind is required"}
+    end
+  end
+
+  def create_event(attrs) when is_list(attrs) do
+    if Keyword.keyword?(attrs) and Keyword.has_key?(attrs, :kind) do
+      Event.create(attrs.kind, attrs)
+    else
+      {:error, "invalid attrs: must be a map or Keyword list with a `:kind` attribute"}
+    end
+  end
+
+  def create_event(_), do: {:error, "invalid attrs provided, must be a map or a keyword list"}
+
   # === Publishing Events ===
 
   @doc """
@@ -157,7 +180,7 @@ defmodule NostrEx do
       {:ok, :sent}
   """
   @spec send_event(Event.t(), binary() | struct(), Keyword.t()) :: {:ok, :sent} | {:error, String.t()}
-  def send_event(%Nostr.Event{} = event, signer_or_privkey, opts \\ []) do
+  def send_event(%Event{} = event, signer_or_privkey, opts \\ []) do
     Client.send_event(event, signer_or_privkey, opts)
   end
 
