@@ -1,6 +1,6 @@
 defmodule NostrEx do
   @moduledoc """
-  A lightweight, OTP-compliant Nostr client library for Elixir applications.
+  A Nostr client library for Elixir applications.
 
   ## Quick Start
 
@@ -123,7 +123,8 @@ defmodule NostrEx do
       iex> NostrEx.send_note("Hello specific relay!", private_key, send_via: ["relay_example_com"])
       {:ok, "abcd1231f..."}
   """
-  @spec send_note(binary(), binary() | struct(), Keyword.t()) :: {:ok, :sent} | {:error, String.t()}
+  @spec send_note(binary(), binary() | struct(), Keyword.t()) ::
+          {:ok, :sent} | {:error, String.t()}
   def send_note(note, signer_or_privkey, opts \\ []) do
     case is_binary(note) do
       true ->
@@ -151,7 +152,8 @@ defmodule NostrEx do
       iex> NostrEx.send_long_form("# My Blog Post\\n\\nContent here...", signer)
       {:ok, :sent}
   """
-  @spec send_long_form(binary(), binary() | struct(), Keyword.t()) :: {:ok, :sent} | {:error, String.t()}
+  @spec send_long_form(binary(), binary() | struct(), Keyword.t()) ::
+          {:ok, :sent} | {:error, String.t()}
   def send_long_form(text, signer_or_privkey, opts \\ []) do
     case is_binary(text) do
       true ->
@@ -165,11 +167,11 @@ defmodule NostrEx do
 
   @doc """
   Send an event.
-  
+
   ## Options
 
   - `:send_via` - List of relay names to send this note to. Defaults to all connected relays.
-  
+
   ## Examples
 
       iex> NostrEx.send_event(%Event{kind: 1, content: "gm"}, privkey)
@@ -179,7 +181,8 @@ defmodule NostrEx do
       iex> NostrEx.send_event(%Event{kind: 1, content: "gm"}, signer)
       {:ok, :sent}
   """
-  @spec send_event(Event.t(), binary() | struct(), Keyword.t()) :: {:ok, :sent} | {:error, String.t()}
+  @spec send_event(Event.t(), binary() | struct(), Keyword.t()) ::
+          {:ok, :sent} | {:error, String.t()}
   def send_event(%Event{} = event, signer_or_privkey, opts \\ []) do
     Client.send_event(event, signer_or_privkey, opts)
   end
@@ -198,7 +201,8 @@ defmodule NostrEx do
       iex> NostrEx.send_subscription([authors: [pubkey], kinds: [1]], send_via: ["relay_example_com"])
       {:ok, "subscription_id"}
   """
-  @spec send_subscription([Keyword.t()] | Keyword.t(), Keyword.t()) :: {:ok, String.t()} | {:error, String.t()}
+  @spec send_subscription([Keyword.t()] | Keyword.t(), Keyword.t()) ::
+          {:ok, String.t()} | {:error, String.t()}
   def send_subscription(filter, opts \\ []), do: Client.send_sub(filter, opts)
 
   @doc """
