@@ -194,39 +194,52 @@ defmodule NostrEx.Client do
 
   def subscribe(_, sub_id, _), do: {:error, "invalid sub_id format, got #{sub_id}"}
 
-  @doc """
-  Sign an event with a private key or signer and serialize it as a JSON message.
-  """
-  @spec sign_and_serialize(Event.t(), binary() | struct()) ::
-          {:ok, {binary(), binary()}} | {:error, String.t()}
-  def sign_and_serialize(%Event{} = event, privkey) when is_binary(privkey) do
+  def sign_event(%Event{} = event, privkey) when is_binary(privkey) do
     try do
       signed_event = Event.sign(event, privkey)
-      serialized = signed_event |> Message.create_event() |> Message.serialize()
-      {:ok, {signed_event.id, serialized}}
+      {:ok, signed_event}
     catch
       _ -> {:error, "failed to sign event"}
     end
   end
 
-  def sign_and_serialize(%Event{} = event, signer_pid) when is_pid(signer_pid) do
+  def sign_event(%Event{} = event, signer_pid) when is_pid(signer_pid) do
     case NostrEx.Signer.Local.sign_event(signer_pid, event) do
       {:ok, signed_event} ->
-        serialized = signed_event |> Message.create_event() |> Message.serialize()
-        {:ok, {signed_event.id, serialized}}
+        {:ok, signed_event}
 
       {:error, reason} ->
             {:error, reason}
     end
   end
 
-  def sign_and_serialize(%Event{}, signer_or_privkey),
+  def sign_event(%Event{}, signer_or_privkey),
     do:
       {:error,
        "signer must be a binary private key or struct implementing NostrEx.Signer, got: #{inspect(signer_or_privkey)}"}
 
+  @doc """
+  Sign an event with a private key or signer and serialize it as a JSON message.
+  """
+  @spec sign_and_serialize(Event.t(), binary() | struct()) ::
+          {:ok, binary(), binary()} | {:error, String.t()}
+  def sign_and_serialize(%Event{} = event, signer_or_privkey) do
+    case sign_event(event, signer_or_privkey) do
+      {:ok, signed_event} ->
+        serialized = serialize(signed_event)
+        {:ok, signed_event.id, serialized}
+      err -> err
+    end
+  end
+
   def sign_and_serialize(_, _),
     do: {:error, "invalid event provided, must be an %Event{} struct."}
+
+  def serialize(%Event{} = signed_event) do
+    signed_event
+    |> Message.create_event()
+    |> Message.serialize()
+  end
 
   @spec get_relays(nil | :all | [atom() | pid() | String.t()]) :: [atom() | pid() | {:error, String.t()}]
   defp get_relays(nil), do: get_relays(:all)

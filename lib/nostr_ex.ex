@@ -101,6 +101,13 @@ defmodule NostrEx do
 
   def create_event(_), do: {:error, "invalid attrs provided, must be a map or a keyword list"}
 
+  @doc """
+  Sign an event with a signer or private key.
+  """
+  def sign_event(%Event{} = event, signer_or_privkey), do: Client.sign_event(event, signer_or_privkey)
+
+  def sign_event(_event, _signer_or_privkey), do: {:error, "event must be an %Event{} struct"}
+
   # === Publishing Events ===
 
   @doc """

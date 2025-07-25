@@ -39,10 +39,20 @@ defmodule NostrEx.ClientTest do
     end
   end
 
+  describe "sign event" do
+    test "succeeds with private key" do
+      event = Event.create(1, content: "test content")
+      assert {:ok, signed_event} = Client.sign_event(event, @privkey)
+      assert signed_event.kind == event.kind
+      assert signed_event.content == event.content
+      assert String.length(signed_event.sig) == 128
+    end
+  end
+
   describe "sign_and_serialize/2" do
     test "signs and serializes a valid event" do
       event = Event.create(1, content: "test content")
-      {:ok, {event_id, result}} = Client.sign_and_serialize(event, @privkey)
+      {:ok, event_id, result} = Client.sign_and_serialize(event, @privkey)
 
       assert is_binary(result)
 
@@ -63,9 +73,6 @@ defmodule NostrEx.ClientTest do
       assert {:error, "invalid sub_id format, got 123"} =
                Client.subscribe("relay_name", 123, "payload")
     end
-  end
-
-  describe "close_sub/1" do
   end
 
   describe "close_conn/1" do
