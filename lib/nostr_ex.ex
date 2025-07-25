@@ -5,7 +5,7 @@ defmodule NostrEx do
   ## Quick Start
 
       # Connect to a relay
-      {:ok, _pid} = NostrEx.add_relay("wss://relay.example.com")
+      {:ok, _pid} = NostrEx.connect_relay("wss://relay.example.com")
 
       # Send a note
       NostrEx.send_note("Hello Nostr!", private_key)
@@ -34,30 +34,29 @@ defmodule NostrEx do
 
   ## Examples
 
-      iex> NostrEx.add_relay("wss://relay.example.com")
+      iex> NostrEx.connect_relay("wss://relay.example.com")
       {:ok, #PID<0.123.0>}
 
-      iex> NostrEx.add_relay("invalid-url")
+      iex> NostrEx.connect_relay("invalid-url")
       {:error, "Invalid URL"}
   """
-  @spec add_relay(binary()) :: {:ok, pid()} | {:error, String.t() | term()}
-  def add_relay(relay_url) do
-    RelayManager.connect(relay_url)
-  end
+  @spec connect_relay(binary()) :: {:ok, pid()} | {:error, String.t() | term()}
+  def connect_relay(relay_url), do: RelayManager.connect(relay_url)
 
   @doc """
-  Remove a relay connection.
+  Disconnect from a relay. Closes the websocket connection and clears any associated subscription tracking data.
+  The argument can either be the binary URL of the relay, or the relay's registered name.
 
   ## Examples
 
-      iex> NostrEx.remove_relay("wss://relay.example.com")
+      iex> NostrEx.disconnect_relay("wss://relay.example.com")
       :ok
 
-      iex> NostrEx.remove_relay(:relay_example_com)
+      iex> NostrEx.disconnect_relay(:relay_example_com)
       :ok
   """
-  @spec remove_relay(binary()) :: :ok | {:error, :not_found}
-  def remove_relay(relay_url) when is_binary(relay_url) do
+  @spec disconnect_relay(binary()) :: :ok | {:error, :not_found}
+  def disconnect_relay(relay_url) when is_binary(relay_url) do
     relay_url
     |> URI.parse()
     |> Map.get(:host)
@@ -65,19 +64,19 @@ defmodule NostrEx do
     |> Client.close_conn()
   end
 
-  def remove_relay(relay_url) when is_atom(relay_url), do: Client.close_conn(relay_url)
+  def disconnect_relay(relay_name) when is_atom(relay_name), do: Client.close_conn(relay_name)
 
   @doc """
   Get the status of all connected relays.
 
   Returns a list of relay status maps containing url, name, ready?, and closing? fields.
   """
-  def relay_status, do: RelayManager.get_states()
+  def list_relay_states, do: RelayManager.get_states()
 
   @doc """
   Get list of connected relay names.
   """
-  def connected_relays, do: RelayManager.registered_names()
+  def list_connected_relays, do: RelayManager.registered_names()
 
   @doc """
   Create event from `attrs`.
@@ -290,12 +289,12 @@ defmodule NostrEx do
   @doc """
   Get all active subscription IDs.
   """
-  @spec active_subscriptions() :: [String.t()]
-  def active_subscriptions, do: RelayAgent.get_unique_subscriptions()
+  @spec list_active_subscriptions() :: [String.t()]
+  def list_active_subscriptions, do: RelayAgent.get_unique_subscriptions()
 
   @doc """
   Get which relays are handling a specific subscription.
   """
-  @spec subscription_relays(binary()) :: [atom()]
-  def subscription_relays(sub_id), do: RelayAgent.get_relays_for_sub(sub_id)
+  @spec list_subscription_relays(binary()) :: [atom()]
+  def list_subscription_relays(sub_id), do: RelayAgent.get_relays_for_sub(sub_id)
 end

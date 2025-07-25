@@ -27,7 +27,7 @@ end
 
 ```elixir
 # Connect to a relay
-{:ok, _pid} = NostrEx.add_relay("wss://relay.example.com")
+{:ok, _pid} = NostrEx.connect_relay("wss://relay.example.com")
 ```
 
 ### Sending Notes
