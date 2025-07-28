@@ -25,26 +25,26 @@ defmodule NostrEx.Client do
   # === Event Publishing ===
 
   @doc """
-  Send an event as an `%Event{}` struct.
+  Send a signed event as an `%Event{}` struct.
 
   ## Options
   - `:send_via` - List of relays to send the event to. Defaults to all connected relays.
   """
-  @spec send_event(Event.t(), binary() | struct(), keyword()) ::
+  @spec send_event(Event.t(), keyword()) ::
           {:ok, binary()} | {:error, String.t() | [String.t()]}
-  def send_event(event, signer_or_privkey, opts \\ [])
+  def send_event(event, opts \\ [])
 
-  def send_event(%Nostr.Event{} = event, signer_or_privkey, opts) do
+  def send_event(%Nostr.Event{} = event, opts) do
     with relay_names = get_relays(opts[:send_via]),
          true <- relay_names != [],
-         {:ok, {event_id, payload}} <- sign_and_serialize(event, signer_or_privkey) do
+         payload <- serialize(event) do
       {_oks, errors} =
         relay_names
         |> Enum.map(&send_event_serialized(&1, payload))
         |> Enum.split_with(&match?(:ok, &1))
 
       case errors do
-        [] -> {:ok, event_id}
+        [] -> {:ok, event.id}
         _ -> {:error, Keyword.values(errors)}
       end
     else
@@ -53,7 +53,19 @@ defmodule NostrEx.Client do
     end
   end
 
-  def send_event(_event, _signer_or_privkey, _opts),
+  @doc """
+  Send an event and the private key or Signer process to sign the event with.
+  """
+  @spec sign_and_send_event(Event.t(), binary() | struct(), keyword()) ::
+          {:ok, binary()} | {:error, String.t() | [String.t()]}
+  def sign_and_send_event(%Event{} = event, signer_or_privkey, opts \\ []) do
+    case sign_event(event, signer_or_privkey) do
+      {:ok, signed_event} -> send_event(signed_event, opts)
+      {:error, reason} -> {:error, reason}
+    end
+  end
+
+  def sign_andsend_event(_event, _signer_or_privkey, _opts),
     do: {:error, "invalid event provided, must be an %Event{} struct."}
 
   @doc """

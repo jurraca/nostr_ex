@@ -135,7 +135,7 @@ defmodule NostrEx do
     case is_binary(note) do
       true ->
         %{event: event} = Event.Note.create(note)
-        Client.send_event(event, signer_or_privkey, opts)
+        Client.sign_and_send_event(event, signer_or_privkey, opts)
 
       false ->
         {:error, "Note must be a binary, got: #{note}"}
@@ -164,7 +164,7 @@ defmodule NostrEx do
     case is_binary(text) do
       true ->
         event = Event.create(30023, content: text)
-        send_event(event, signer_or_privkey, opts)
+        Client.sign_and_send_event(event, signer_or_privkey, opts)
 
       false ->
         {:error, "Note must be a binary, got: #{text}"}
@@ -180,17 +180,12 @@ defmodule NostrEx do
 
   ## Examples
 
-      iex> NostrEx.send_event(%Event{kind: 1, content: "gm"}, privkey)
-      {:ok, :sent}
-
-      iex> signer = NostrEx.Signer.PrivateKey.new(privkey)
-      iex> NostrEx.send_event(%Event{kind: 1, content: "gm"}, signer)
+      iex> NostrEx.send_event(%Event{kind: 1, content: "gm"}, send_via: ["wss://relay.lol"])
       {:ok, :sent}
   """
-  @spec send_event(Event.t(), binary() | struct(), Keyword.t()) ::
-          {:ok, :sent} | {:error, String.t()}
-  def send_event(%Event{} = event, signer_or_privkey, opts \\ []) do
-    Client.send_event(event, signer_or_privkey, opts)
+  @spec send_event(map(), Keyword.t()) :: {:ok, :sent} | {:error, String.t()}
+  def send_event(%Event{} = event, opts \\ []) do
+    Client.send_event(event, opts)
   end
 
   # === Subscriptions ===
