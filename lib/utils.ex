@@ -3,7 +3,7 @@ defmodule NostrEx.Utils do
   Aggregates a list of :ok / :error tuples into a single tuple.
   """
   def collect(results) do
-    {oks, errors} = Enum.split_with(results, &match?({:ok, _}, &1))
+    {oks, errors} = Enum.split_with(results, &(match?({:ok, _}, &1) || match?(:ok, &1)))
 
     case errors do
       [] -> {:ok, Enum.map(oks, fn {:ok, v} -> v end)}
