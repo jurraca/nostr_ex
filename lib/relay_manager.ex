@@ -19,11 +19,9 @@ defmodule NostrEx.RelayManager do
   use DynamicSupervisor
   alias NostrEx.{RelayRegistry, Socket, Utils}
 
-  @name RelaySupervisor
-
   @spec start_link(keyword()) :: GenServer.on_start()
   def start_link(opts) do
-    DynamicSupervisor.start_link(opts)
+    DynamicSupervisor.start_link(opts, name: __MODULE__)
   end
 
   @impl true
@@ -46,7 +44,7 @@ defmodule NostrEx.RelayManager do
   def connect(relay_url) do
     with {:ok, uri} <- parse_url(relay_url),
          relay_name = Utils.name_from_host(uri.host) do
-      case DynamicSupervisor.start_child(@name, {Socket, %{uri: uri, name: relay_name}}) do
+      case DynamicSupervisor.start_child(__MODULE__, {Socket, %{uri: uri, name: relay_name}}) do
         {:ok, pid} -> connect_to_relay(pid)
         {:error, {:already_started, pid}} -> {:ok, pid}
         {:error, reason} -> {:error, reason}
@@ -92,7 +90,7 @@ defmodule NostrEx.RelayManager do
 
   @spec disconnect(pid() | String.t() | atom()) :: :ok | {:error, term()}
   def disconnect(pid) when is_pid(pid) do
-    DynamicSupervisor.terminate_child(@name, pid)
+    DynamicSupervisor.terminate_child(__MODULE__, pid)
   end
 
   def disconnect(relay_name) when is_binary(relay_name) do
@@ -107,11 +105,11 @@ defmodule NostrEx.RelayManager do
   end
 
   @spec relays() :: [{:undefined, pid(), :worker, [module()]}]
-  def relays(), do: DynamicSupervisor.which_children(@name)
+  def relays(), do: DynamicSupervisor.which_children(__MODULE__)
 
   @spec active_pids() :: [pid()]
   def active_pids() do
-    @name
+    __MODULE__
     |> DynamicSupervisor.which_children()
     |> Enum.map(&get_pid/1)
   end

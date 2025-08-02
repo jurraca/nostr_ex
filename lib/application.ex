@@ -3,7 +3,7 @@ defmodule NostrEx.Application do
 
   def start(_type, _args) do
     children = [
-      {NostrEx.RelayManager, name: RelaySupervisor, strategy: :one_for_one},
+      {DynamicSupervisor, name: NostrEx.RelayManager, strategy: :one_for_one},
       {Registry,
        [keys: :duplicate, name: NostrEx.PubSub, partitions: System.schedulers_online()]},
       {Registry, [keys: :unique, name: NostrEx.RelayRegistry]},
