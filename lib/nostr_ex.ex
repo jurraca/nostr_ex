@@ -65,6 +65,7 @@ defmodule NostrEx do
   end
 
   def disconnect_relay(relay_name) when is_atom(relay_name), do: Client.close_conn(relay_name)
+  def disconnect_relay(relay_pid) when is_pid(relay_pid), do: Client.close_conn(relay_pid)
 
   @doc """
   Get the status of all connected relays.

@@ -134,15 +134,17 @@ defmodule NostrEx.Client do
   end
 
   @doc """
-  Close a connection to a relay by name.
+  Close a connection to a relay by name or pid.
   """
   @spec close_conn(atom()) :: :ok | {:error, :not_found}
-  def close_conn(relay_name) do
+  def close_conn(relay_name) when is_atom(relay_name) do
     case Registry.lookup(NostrEx.RelayRegistry, relay_name) do
-      [{pid, _}] -> DynamicSupervisor.terminate_child(RelayManager, pid)
+      [{pid, _}] -> close_conn(pid)
       _ -> {:error, :not_found}
     end
   end
+
+  def close_conn(pid), do: DynamicSupervisor.terminate_child(RelayManager, pid)
 
   @doc """
   Create filters from keyword list(s).

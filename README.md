@@ -7,7 +7,7 @@ A lightweight, OTP-compliant Nostr client library for Elixir applications. This 
 - OTP-compliant architecture with proper supervision
 - Simple subscription management
 - NIP-05 verification support
-- Built on top of Mint WebSocket for reliable connections
+- Built on top of Mint WebSocket
 
 ## Installation
 
