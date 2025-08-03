@@ -83,31 +83,27 @@ defmodule NostrEx.RelayManager do
     end
   end
 
-  @spec ready?(pid() | atom()) :: boolean() | {:error, :not_found}
-  def ready?(pid) when is_pid(pid), do: Socket.get_status(pid) |> Map.get(:ready?)
-
-  def ready?(relay_name) do
+  @spec ready?(atom()) :: boolean() | {:error, :not_found | String.t()}
+  def ready?(relay_name) when is_atom(relay_name) do
     case lookup(relay_name) do
-      {:ok, pid} -> ready?(pid)
+      {:ok, pid} -> Socket.get_status(pid) |> Map.get(:ready?)
       err -> err
     end
   end
 
-  @spec disconnect(pid() | String.t() | atom()) :: :ok | {:error, term()}
-  def disconnect(pid) when is_pid(pid) do
-    DynamicSupervisor.terminate_child(__MODULE__, pid)
-  end
+  def ready?(_),
+    do: {:error, "relay name must be an atom, see registered_names/0 for currently active relay names."}
 
-  def disconnect(relay_name) when is_binary(relay_name) do
-    String.to_atom(relay_name) |> disconnect()
-  end
-
+  @spec disconnect(atom()) :: :ok | {:error, term() | String.t()}
   def disconnect(relay_name) when is_atom(relay_name) do
     case lookup(relay_name) do
-      {:ok, pid} -> disconnect(pid)
+      {:ok, pid} -> DynamicSupervisor.terminate_child(__MODULE__, pid)
       err -> err
     end
   end
+
+  def disconnect(_),
+    do: {:error, "relay name must be an atom, see registered_names/0 for currently active relay names."}
 
   @spec relays() :: [{:undefined, pid(), :worker, [module()]}]
   def relays(), do: DynamicSupervisor.which_children(__MODULE__)
