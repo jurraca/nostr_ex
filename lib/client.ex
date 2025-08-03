@@ -56,9 +56,11 @@ defmodule NostrEx.Client do
   @doc """
   Send an event and the private key or Signer process to sign the event with.
   """
+  def sign_and_send_event(event, signer_or_privkey, opts \\ [])
+
   @spec sign_and_send_event(Event.t(), binary() | struct(), keyword()) ::
           {:ok, binary()} | {:error, String.t() | [String.t()]}
-  def sign_and_send_event(%Event{} = event, signer_or_privkey, opts \\ []) do
+  def sign_and_send_event(%Event{} = event, signer_or_privkey, opts) do
     case sign_event(event, signer_or_privkey) do
       {:ok, signed_event} -> send_event(signed_event, opts)
       {:error, reason} -> {:error, reason}
