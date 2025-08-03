@@ -73,9 +73,9 @@ defmodule NostrEx.Client do
   @doc """
   Send a serialized payload to a specific relay.
 
-  `relay` can be either a PID or a relay name registered in the RelayRegistry.
+  `relay` must be a relay name registered in the RelayRegistry.
   """
-  @spec send_event_serialized(pid() | atom(), binary()) :: :ok | {:error, atom() | String.t()}
+  @spec send_event_serialized(atom(), binary()) :: :ok | {:error, atom() | String.t()}
   def send_event_serialized(relay, payload) when is_binary(payload) do
     Socket.send_message(relay, payload)
   end
@@ -263,34 +263,39 @@ defmodule NostrEx.Client do
   defp get_relays(:all), do: RelayManager.registered_names()
 
   defp get_relays([_h | _t] = relay_list) do
-    Enum.map(relay_list, fn relay ->
-      cond do
-        relay in RelayManager.registered_names() ->
-          relay
+  {oks, errors} =
+    relay_list
+    |> Enum.map(&normalize(&1))
+    |> Enum.split_with(&is_atom(&1))
 
-        is_pid(relay) and relay in RelayManager.active_pids() ->
-          relay
-
-        is_binary(relay) ->
-          host = relay |> URI.parse() |> Map.get(:host)
-
-          with true <- !is_nil(host),
-               atom_name = Utils.name_from_host(host),
-               true <- atom_name in RelayManager.registered_names() do
-            atom_name
-          else
-            _ ->
-              {:error, "relay not connected or invalid, got #{relay}"}
-          end
-
-        true ->
-          {:error, "invalid relay name, got #{relay}"}
-      end
-    end)
+    Logger.error(Enum.join(errors, ", "))
+    oks
   end
 
   defp get_relays(relay_list) do
     Logger.error("invalid relay list provided, got: #{Enum.join(relay_list, ", ")}")
     []
+  end
+
+  defp normalize(relay) do
+    cond do
+      relay in RelayManager.registered_names() ->
+        relay
+
+      is_binary(relay) ->
+        host = relay |> URI.parse() |> Map.get(:host)
+
+        with true <- !is_nil(host),
+             atom_name = Utils.name_from_host(host),
+             true <- atom_name in RelayManager.registered_names() do
+          atom_name
+        else
+          _ ->
+            "relay not connected or invalid, got #{relay}"
+        end
+
+      true ->
+        "invalid relay name, got #{relay}"
+    end
   end
 end
