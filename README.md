@@ -1,13 +1,6 @@
 # NostrEx
 
-A lightweight, OTP-compliant Nostr client library for Elixir applications. This library provides a clean interface for connecting to Nostr relays, managing subscriptions, and handling Nostr events.
-
-## Features
-
-- OTP-compliant architecture with proper supervision
-- Simple subscription management
-- NIP-05 verification support
-- Built on top of Mint WebSocket
+An OTP-compliant Nostr client library for Elixir applications. It provides an interface for connecting to Nostr relays, managing subscriptions, sending and receiving Nostr events.
 
 ## Installation
 
@@ -27,25 +20,54 @@ end
 
 ```elixir
 # Connect to a relay
-{:ok, _pid} = NostrEx.connect_relay("wss://relay.example.com")
+{:ok, :relay_example_com} = NostrEx.connect_relay("wss://relay.example.com")
 ```
+
+Relays are tracked by name as atoms via the `RelayRegistry`. All public facing functions expect this name as input, so you don't have to worry about PIDs. See `RelayManager.registered_names/0`.
 
 ### Sending Notes
 
 ```elixir
 # Send a simple note
-NostrEx.send_note("Hello Nostr!", private_key)
+iex(1)> NostrEx.send_note("Hello Nostr!", private_key)
 
-# Send a long-form note
-NostrEx.send_long_form("# My Blog Post\n\nContent here...", private_key)
+# Create an event with kind and attrs
+iex(2)> NostrEx.create_event(1, %{content: "hello joe"})
+%Nostr.Event{
+  id: nil,
+  pubkey: nil,
+  kind: 1,
+  tags: [],
+  created_at: ~U[2025-08-03 15:29:15.261264Z],
+  content: "hello joe",
+  sig: nil
+}
+
+# Sign the event with your hex-encoded private key
+iex(3)> {:ok, signed} = NostrEx.sign_event(event, private_key)
+{:ok,
+ %Nostr.Event{
+   id: "871a08bf8e1b6d286d92238ce44648a94f7397042dd01a4ecc6db0afed745ec3",
+   pubkey: "93155d8268a995888fe935ed9de633be690303ab37ba9d698c9f715076a99563",
+   kind: 1,
+   tags: [],
+   created_at: ~U[2025-08-03 15:33:30.652067Z],
+   content: "hello joe",
+   sig: "60278f60548d5fa49841e0b7518201625aba9a9cf1cdc6d72621290b1943c21971d90c5ca3c2fba49b00ef84f488bac8bc0932c8ccc5ba5e3af2121ce7ad67c9"
+ }}
+
+ # send it, returns the event ID
+ iex(4)> NostrEx.send_event(signed)
+ {:ok, "871a08bf8e1b6d286d92238ce44648a94f7397042dd01a4ecc6db0afed745ec3"}
 ```
+
+The `send`-type functions take a `send_via` option in `opts` to specify which relays to send the event to.
+If not specified, all currently connected relays will be used.
 
 ### Subscriptions
 
 NostrEx forwards messages received via a Nostr subscription to the process that created the subscription.
-
-Put another way, the process you call a `NostrEx.subscribe_*` function from will then receive the events for that subscription.
-It's up to you to decide how to handle those received events.
+It's up to you to implement how to handle those received events.
 
 You can subscribe to any subscription ID by calling
 `Registry.register(NostrEx.PubSub, sub_id, nil)` from the process you want to be subscribed,
@@ -64,8 +86,8 @@ NostrEx.subscribe_follows(pubkey)
 # Custom subscription with filters
 NostrEx.send_subscription([
   authors: [pubkey],
-  kinds: [1],
-  since: unix_timestamp
+  kinds: [30023],
+  since: 1753135689
 ])
 ```
 
@@ -87,12 +109,12 @@ NostrEx uses a supervision tree with the following components:
 - `RelayRegistry`: Registry for mapping relay names to connection pids
 
 This library is built on [Sgiath](https://github.com/Sgiath)'s [nostr_lib](https://github.com/Sgiath/nostr-lib) library.
-This dependency compiles the libsecp256k1 C library for cryptographic operations, therefore you will need a C compiler
-to compile this project.
+This dependency compiles the libsecp256k1 C library for cryptographic operations, 
+therefore you will need a C compiler to build this project.
 
 ## Contributing
 
-Issues and pull requests are welcome! Please ensure you add tests for any new functionality.
+Issues and pull requests are welcome! Please add tests for any new functionality.
 
 ## License
 
