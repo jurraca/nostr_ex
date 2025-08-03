@@ -4,8 +4,9 @@ defmodule NostrEx do
 
   ## Quick Start
 
-      # Connect to a relay
-      {:ok, _pid} = NostrEx.connect_relay("wss://relay.example.com")
+      # Connect to a relay (returns registered atom name)
+      {:ok, relay_name} = NostrEx.connect_relay("wss://relay.example.com")
+      # => {:ok, :relay_example_com}
 
       # Send a note
       NostrEx.send_note("Hello Nostr!", private_key)
@@ -14,7 +15,7 @@ defmodule NostrEx do
       {:ok, sub_id} = NostrEx.subscribe_notes(pubkey)
 
       # Listen for events
-      NostrEx.listen_for_sub(sub_id)
+      NostrEx.listen_for_subscription(sub_id)
 
   ## Modules
 
@@ -55,17 +56,30 @@ defmodule NostrEx do
       iex> NostrEx.disconnect_relay(:relay_example_com)
       :ok
   """
-  @spec disconnect_relay(binary()) :: :ok | {:error, :not_found}
+  @spec disconnect_relay(binary() | atom()) :: :ok | {:error, :not_found}
   def disconnect_relay(relay_url) when is_binary(relay_url) do
-    relay_url
-    |> URI.parse()
-    |> Map.get(:host)
-    |> NostrEx.Utils.name_from_host()
-    |> Client.close_conn()
+    case url_to_relay_name(relay_url) do
+      {:ok, relay_name} -> Client.close_conn(relay_name)
+      {:error, reason} -> {:error, reason}
+    end
   end
 
   def disconnect_relay(relay_name) when is_atom(relay_name), do: Client.close_conn(relay_name)
-  def disconnect_relay(relay_pid) when is_pid(relay_pid), do: Client.close_conn(relay_pid)
+
+  # Helper function to convert URL to registered atom name
+  @spec url_to_relay_name(binary()) :: {:ok, atom()} | {:error, String.t()}
+  defp url_to_relay_name(relay_url) do
+    case URI.parse(relay_url) do
+      %URI{host: nil} -> {:error, "Invalid URL: #{relay_url}"}
+      %URI{host: host} -> 
+        relay_name = NostrEx.Utils.name_from_host(host)
+        if relay_name in RelayManager.registered_names() do
+          {:ok, relay_name}
+        else
+          {:error, "Relay not connected: #{relay_url}"}
+        end
+    end
+  end
 
   @doc """
   Get the status of all connected relays.
