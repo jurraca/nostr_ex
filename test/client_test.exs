@@ -1,7 +1,6 @@
 defmodule NostrEx.ClientTest do
   use ExUnit.Case
   alias NostrEx.Client
-  alias Nostr.Event
 
   @privkey "5ee1c8000ab28edd64d74a7d951af749cfb0b7e1f31a4ad87940a55b0e7e6b3d"
 
@@ -41,8 +40,8 @@ defmodule NostrEx.ClientTest do
 
   describe "sign event" do
     test "succeeds with private key" do
-      event = Event.create(1, content: "test content")
-      assert {:ok, signed_event} = Client.sign_event(event, @privkey)
+      event = NostrEx.create_event(1, content: "test content")
+      assert {:ok, signed_event} = NostrEx.sign_event(event, @privkey)
       assert signed_event.kind == event.kind
       assert signed_event.content == event.content
       assert String.length(signed_event.sig) == 128
@@ -51,7 +50,7 @@ defmodule NostrEx.ClientTest do
 
   describe "sign_and_serialize/2" do
     test "signs and serializes a valid event" do
-      event = Event.create(1, content: "test content")
+      event = NostrEx.create_event(1, content: "test content")
       {:ok, event_id, result} = Client.sign_and_serialize(event, @privkey)
 
       assert is_binary(result)
