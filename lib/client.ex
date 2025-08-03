@@ -144,7 +144,8 @@ defmodule NostrEx.Client do
     end
   end
 
-  def close_conn(pid), do: DynamicSupervisor.terminate_child(RelayManager, pid)
+  def close_conn(pid) when is_pid(pid), do: DynamicSupervisor.terminate_child(RelayManager, pid)
+  def close_conn(_), do: {:error, :not_found}
 
   @doc """
   Create filters from keyword list(s).

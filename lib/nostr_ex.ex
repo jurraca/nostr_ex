@@ -82,19 +82,15 @@ defmodule NostrEx do
   @doc """
   Create event from `attrs`.
 
-  `attrs` can be a map with atom keys or a keyword list, and must at minimum contain a `kind` attribute.
+  `attrs` can be a map with atom keys or a keyword list.
   """
-  def create_event(%{kind: kind} = attrs) do
-    if kind do
-      Event.create(kind, Enum.into(attrs, []))
-    else
-      {:error, "event kind is required"}
-    end
+  def create_event(kind, %{} = attrs) do
+    Event.create(kind, Enum.into(attrs, []))
   end
 
-  def create_event(attrs) when is_list(attrs) do
-    if Keyword.keyword?(attrs) and Keyword.has_key?(attrs, :kind) do
-      Event.create(attrs.kind, attrs)
+  def create_event(kind, attrs) when is_list(attrs) do
+    if Keyword.keyword?(attrs) do
+      Event.create(kind, attrs)
     else
       {:error, "invalid attrs: must be a map or Keyword list with a `:kind` attribute"}
     end
