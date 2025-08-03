@@ -65,7 +65,7 @@ defmodule NostrEx.Client do
     end
   end
 
-  def sign_andsend_event(_event, _signer_or_privkey, _opts),
+  def sign_and_send_event(_event, _signer_or_privkey, _opts),
     do: {:error, "invalid event provided, must be an %Event{} struct."}
 
   @doc """
