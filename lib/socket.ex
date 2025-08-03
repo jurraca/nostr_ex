@@ -71,8 +71,8 @@ defmodule NostrEx.Socket do
       :exit, {:timeout, _} ->
         {:error, "connection timed out after #{timeout}ms. Is your URL correct?"}
 
-      :exit, reason ->
-        {:error, "connection failed: #{inspect(reason)}"}
+      :exit, {reason, msg} ->
+        {:error, reason}
     end
   end
 
@@ -115,6 +115,7 @@ defmodule NostrEx.Socket do
   @impl GenServer
   @spec init({URI.t(), atom()}) :: {:ok, %__MODULE__{}}
   def init({uri, name}) do
+    Process.flag(:trap_exit, true)
     {:ok, %__MODULE__{uri: uri, name: name}}
   end
 
@@ -128,7 +129,7 @@ defmodule NostrEx.Socket do
         {:noreply, new_state}
 
       {:error, reason} ->
-        {:stop, :normal, {:error, reason}, state}
+        {:stop, {:shutdown, reason}, state}
     end
   end
 
@@ -163,6 +164,17 @@ defmodule NostrEx.Socket do
   @impl GenServer
   @spec handle_info(term(), %__MODULE__{}) ::
           {:noreply, %__MODULE__{}} | {:stop, :normal, %__MODULE__{}}
+  def handle_info({:EXIT, _pid, reason}, state) do
+    Logger.info("Relay process exited: #{inspect(reason)}")
+    {:stop, :normal, state}
+  end
+
+  def handle_info({:tcp_closed, _port}, state) do
+    Logger.info("Connection closed by remote - #{state.uri.host}")
+    new_state = %{state | closing?: true, ready?: false, websocket: nil}
+    {:stop, :normal, new_state}
+  end
+
   def handle_info(message, state) do
     case Mint.WebSocket.stream(state.conn, message) do
       {:ok, conn, responses} ->
@@ -178,7 +190,7 @@ defmodule NostrEx.Socket do
 
       {:error, _conn, %Mint.TransportError{reason: :closed}, _responses} ->
         new_state = %{state | closing?: true, ready?: false}
-        terminate({:remote, :closed}, new_state)
+        {:stop, :normal, new_state}
 
       {:error, conn, reason, _responses} ->
         Logger.error("WebSocket stream error: #{inspect(reason)}")
@@ -193,30 +205,23 @@ defmodule NostrEx.Socket do
   @impl GenServer
   @spec terminate(term(), %__MODULE__{}) :: :ok
   def terminate(reason, state) do
-    case reason do
-      {:remote, :closed} ->
-        Logger.info("Remote closed the connection - #{state.uri.host}")
+    case RelayAgent.get(state.name) do
+      nil ->
+        :ok
 
-      _other ->
-        Logger.info("Terminating connection to #{state.uri.host}: #{inspect(reason)}")
+      subscriptions when is_list(subscriptions) ->
+        Enum.each(subscriptions, fn sub_id ->
+          close_message =
+            sub_id
+            |> Message.close()
+            |> Message.serialize()
 
-        case RelayAgent.get(state.name) do
-          nil ->
-            :ok
-
-          subscriptions when is_list(subscriptions) ->
-            Enum.each(subscriptions, fn sub_id ->
-              close_message =
-                sub_id
-                |> Message.close()
-                |> Message.serialize()
-
-              _ = send_message(state.name, close_message)
-            end)
-        end
+          _ = send_close_frame_direct(state.name, close_message)
+        end)
     end
 
     RelayAgent.delete_relay(state.name)
+    :ok
   end
 
   ## Private Functions
@@ -242,6 +247,9 @@ defmodule NostrEx.Socket do
           end
 
         {:error, error_msg}
+
+      {:error, %Mint.TransportError{reason: :econnrefused}} ->
+        {:error, "Connection refused to #{uri.host}. Is relay up?"}
 
       {:error, reason} ->
         Logger.error("Connection error: #{inspect(reason)}")
@@ -456,5 +464,20 @@ defmodule NostrEx.Socket do
     Registry.dispatch(NostrEx.PubSub, sub_id, fn entries ->
       for {pid, _} <- entries, do: send(pid, message)
     end)
+  end
+
+  @spec send_close_frame_direct(%__MODULE__{}, binary()) :: :ok | {:error, term()}
+  defp send_close_frame_direct(%{websocket: nil}, _message), do: :ok
+  defp send_close_frame_direct(%{conn: nil}, _message), do: :ok
+
+  defp send_close_frame_direct(state, message) do
+    case Mint.WebSocket.encode(state.websocket, {:text, message}) do
+      {:ok, _websocket, data} ->
+        case Mint.WebSocket.stream_request_body(state.conn, state.request_ref, data) do
+          {:ok, _conn} -> :ok
+          {:error, _reason} -> :ok
+        end
+      {:error, _reason} -> :ok
+    end
   end
 end
