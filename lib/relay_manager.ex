@@ -70,7 +70,7 @@ defmodule NostrEx.RelayManager do
   end
 
   @spec wait_for_ready(pid(), pos_integer(), timeout(), non_neg_integer()) :: {:ok, pid()} | {:error, String.t()}
-  def wait_for_ready(pid, interval, timeout, elapsed_time \\ 0) do
+  defp wait_for_ready(pid, interval, timeout, elapsed_time \\ 0) do
     if elapsed_time >= timeout do
       {:error, "Relay is connected but not ready to receive messages after #{timeout}"}
     else
