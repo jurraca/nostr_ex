@@ -40,19 +40,24 @@ defmodule NostrEx.RelayManager do
   in particular when connecting to multiple relays.
   Note that the return value is not necessarily needed, since you can call `Socket.get_status/1` to see if the connection is ready to send or receive messages.
   """
-  @spec connect(String.t()) :: {:ok, pid()} | {:error, String.t() | term()}
+  @spec connect(String.t()) :: {:ok, pid()} | {:error, String.t()}
   def connect(relay_url) do
     with {:ok, uri} <- parse_url(relay_url),
-         relay_name = Utils.name_from_host(uri.host) do
-      case DynamicSupervisor.start_child(__MODULE__, {Socket, %{uri: uri, name: relay_name}}) do
-        {:ok, pid} -> connect_to_relay(pid)
-        {:error, {:already_started, pid}} -> {:ok, pid}
+         relay_name = Utils.name_from_host(uri.host),
+         {:ok, pid} <- DynamicSupervisor.start_child(__MODULE__, {Socket, %{uri: uri, name: relay_name}}) do
+        case connect_to_relay(pid) do
+          {:ok, _pid} -> {:ok, relay_name}
+          {:error, reason} -> {:error, reason}
+        end
+      else
+        {:error, {:already_started, pid}} ->
+          name = Socket.get_status(pid) |> Map.get(:name)
+          {:ok, name}
         {:error, reason} -> {:error, reason}
-      end
     end
   end
 
-  @spec connect_to_relay(pid(), timeout()) :: {:ok, pid()} | {:error, String.t() | term()}
+  @spec connect_to_relay(pid(), timeout()) :: {:ok, pid()} | {:error, String.t()}
   defp connect_to_relay(pid, timeout \\ 3_000) do
     case Socket.connect(pid) do
       {:ok, :connected} ->
@@ -64,10 +69,10 @@ defmodule NostrEx.RelayManager do
     end
   end
 
-  @spec wait_for_ready(pid(), pos_integer(), timeout(), non_neg_integer()) :: {:ok, pid()} | {:error, :not_ready}
+  @spec wait_for_ready(pid(), pos_integer(), timeout(), non_neg_integer()) :: {:ok, pid()} | {:error, String.t()}
   def wait_for_ready(pid, interval, timeout, elapsed_time \\ 0) do
     if elapsed_time >= timeout do
-      {:error, :not_ready}
+      {:error, "Relay is connected but not ready to receive messages after #{timeout}"}
     else
       if ready?(pid) do
         {:ok, pid}

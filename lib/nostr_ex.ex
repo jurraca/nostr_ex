@@ -35,12 +35,12 @@ defmodule NostrEx do
   ## Examples
 
       iex> NostrEx.connect_relay("wss://relay.example.com")
-      {:ok, #PID<0.123.0>}
+      {:ok, :relay_example_com}
 
-      iex> NostrEx.connect_relay("invalid-url")
+      iex> NostrEx.connect_relay("not-a-url")
       {:error, "Invalid URL"}
   """
-  @spec connect_relay(binary()) :: {:ok, pid()} | {:error, String.t() | term()}
+  @spec connect_relay(binary()) :: {:ok, atom()} | {:error, String.t()}
   def connect_relay(relay_url), do: RelayManager.connect(relay_url)
 
   @doc """
