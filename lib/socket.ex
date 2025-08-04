@@ -71,8 +71,12 @@ defmodule NostrEx.Socket do
       :exit, {:timeout, _} ->
         {:error, "connection timed out after #{timeout}ms. Is your URL correct?"}
 
-      :exit, {reason, msg} ->
+      :exit, {{:shutdown, reason}, _msg} ->
         {:error, reason}
+
+      :exit, msg ->
+        Logger.error(msg)
+        {:error, "Exited"}
     end
   end
 
@@ -121,7 +125,7 @@ defmodule NostrEx.Socket do
 
   @impl GenServer
   @spec handle_call(:connect, GenServer.from(), %__MODULE__{}) ::
-          {:noreply, %__MODULE__{}} | {:stop, :normal, {:error, String.t()}, %__MODULE__{}}
+          {:noreply, %__MODULE__{}} | {:stop, {:shutdown, String.t()}, %__MODULE__{}}
   def handle_call(:connect, from, %{uri: uri} = state) do
     case establish_connection(uri) do
       {:ok, conn, request_ref} ->
@@ -170,7 +174,7 @@ defmodule NostrEx.Socket do
   end
 
   def handle_info({:tcp_closed, _port}, state) do
-    Logger.info("Connection closed by remote - #{state.uri.host}")
+    Logger.info("Connection closed by remote #{state.uri.host}.")
     new_state = %{state | closing?: true, ready?: false, websocket: nil}
     {:stop, :normal, new_state}
   end
@@ -189,7 +193,7 @@ defmodule NostrEx.Socket do
         end
 
       {:error, _conn, %Mint.TransportError{reason: :closed}, _responses} ->
-        new_state = %{state | closing?: true, ready?: false}
+        new_state = %{state | closing?: true, ready?: false, websocket: nil}
         {:stop, :normal, new_state}
 
       {:error, conn, reason, _responses} ->
@@ -204,7 +208,7 @@ defmodule NostrEx.Socket do
 
   @impl GenServer
   @spec terminate(term(), %__MODULE__{}) :: :ok
-  def terminate(reason, state) do
+  def terminate(_reason, state) do
     case RelayAgent.get(state.name) do
       nil ->
         :ok
@@ -216,7 +220,7 @@ defmodule NostrEx.Socket do
             |> Message.close()
             |> Message.serialize()
 
-          _ = send_close_frame_direct(state.name, close_message)
+          _ = send_close_frame(state.name, close_message)
         end)
     end
 
@@ -235,25 +239,16 @@ defmodule NostrEx.Socket do
     ws_scheme = String.to_atom(uri.scheme)
 
     with {:ok, conn} <- Mint.HTTP.connect(http_scheme, uri.host, uri.port, protocols: [:http1]),
-         {:ok, conn, ref} <- Mint.WebSocket.upgrade(ws_scheme, conn, uri.path, []) do
+      {:ok, conn, ref} <- Mint.WebSocket.upgrade(ws_scheme, conn, uri.path, []) do
       {:ok, conn, ref}
     else
-      {:error, reason} when is_list(reason) ->
-        error_msg =
-          cond do
-            Keyword.get(reason, :nxdomain) -> "Invalid domain: #{uri.host}"
-            Keyword.get(reason, :econnrefused) -> "Connection refused to #{uri.host}:#{uri.port}"
-            true -> "Connection failed: #{inspect(reason)}"
-          end
+      {:error, %Mint.TransportError{} = error} ->
+        msg = Exception.message(error)
+        {:error, "Connection error: #{msg}"}
 
-        {:error, error_msg}
-
-      {:error, %Mint.TransportError{reason: :econnrefused}} ->
-        {:error, "Connection refused to #{uri.host}. Is relay up?"}
-
-      {:error, reason} ->
-        Logger.error("Connection error: #{inspect(reason)}")
-        {:error, "Connection failed"}
+      {:error, %Mint.HTTPError{} = error} ->
+        msg = Exception.message(error)
+        {:error, "HTTP error: #{msg}"}
 
       {:error, _conn, reason} ->
         {:error, "WebSocket upgrade failed: #{inspect(reason)}"}
@@ -365,7 +360,6 @@ defmodule NostrEx.Socket do
   defp handle_frame({:ping, data}, state) do
     case send_frame(state, {:pong, data}) do
       {:ok, new_state} -> new_state
-      # Continue on ping/pong errors
       {:error, _reason} -> state
     end
   end
@@ -466,17 +460,15 @@ defmodule NostrEx.Socket do
     end)
   end
 
-  @spec send_close_frame_direct(%__MODULE__{}, binary()) :: :ok | {:error, term()}
-  defp send_close_frame_direct(%{websocket: nil}, _message), do: :ok
-  defp send_close_frame_direct(%{conn: nil}, _message), do: :ok
+  @spec send_close_frame(%__MODULE__{}, binary()) :: :ok
+  defp send_close_frame(%{websocket: nil}, _message), do: :ok
+  defp send_close_frame(%{conn: nil}, _message), do: :ok
 
-  defp send_close_frame_direct(state, message) do
-    case Mint.WebSocket.encode(state.websocket, {:text, message}) do
+  defp send_close_frame(%{websocket: websocket} = state, message) do
+    case Mint.WebSocket.encode(websocket, {:text, message}) do
       {:ok, _websocket, data} ->
-        case Mint.WebSocket.stream_request_body(state.conn, state.request_ref, data) do
-          {:ok, _conn} -> :ok
-          {:error, _reason} -> :ok
-        end
+        _ = Mint.WebSocket.stream_request_body(state.conn, state.request_ref, data)
+        :ok
       {:error, _reason} -> :ok
     end
   end
