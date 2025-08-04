@@ -38,14 +38,22 @@ defmodule NostrEx.Client do
     with relay_names = get_relays(opts[:send_via]),
          true <- relay_names != [],
          payload <- serialize(event) do
-      {_oks, errors} =
+      {oks, errors} =
         relay_names
         |> Enum.map(&send_event_serialized(&1, payload))
         |> Enum.split_with(&match?(:ok, &1))
 
-      case errors do
-        [] -> {:ok, event.id}
-        _ -> {:error, Keyword.values(errors)}
+      count_errors = Enum.count(errors)
+      cond do
+        oks == [] ->
+          errors = Keyword.values(errors)
+          Logger.error("#{count_errors} send(s) failed with errors: #{Enum.join(errors, ", ")}")
+          {:error, errors}
+        errors != [] ->
+          Logger.error("#{event.id}: #{Enum.count(oks)} succeeded, #{count_errors} send(s) failed with errors: #{Enum.join(errors, ", ")}")
+          {:ok, event.id}
+        true ->
+          {:ok, event.id}
       end
     else
       {:error, _} = err -> err
