@@ -71,7 +71,7 @@ defmodule NostrEx do
   defp url_to_relay_name(relay_url) do
     case URI.parse(relay_url) do
       %URI{host: nil} -> {:error, "Invalid URL: #{relay_url}"}
-      %URI{host: host} -> 
+      %URI{host: host} ->
         relay_name = NostrEx.Utils.name_from_host(host)
         if relay_name in RelayManager.registered_names() do
           {:ok, relay_name}
@@ -110,7 +110,7 @@ defmodule NostrEx do
     end
   end
 
-  def create_event(_), do: {:error, "invalid attrs provided, must be a map or a keyword list"}
+  def create_event(_, _), do: {:error, "invalid attrs provided, must be a map or a keyword list"}
 
   @doc """
   Sign an event with a signer or private key.
