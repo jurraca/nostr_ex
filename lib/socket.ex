@@ -6,7 +6,7 @@ defmodule NostrEx.Socket do
   with arguments either the `pid` or the `name` registered on `init`, and the encoded Nostr message to send.
 
   There are two other API function for this GenServer: `connect/1` to connect to a relay via the GenServer process started at `pid`,
-  and `get_status/1`, which returns a subset of the state:
+  and `get_status/1`, which returns a subset of the state, essentially:
   ```
     %{
       url: URI.to_string(state.uri),
@@ -16,7 +16,7 @@ defmodule NostrEx.Socket do
     }
   ```
 
-  The `send_message/2` function sends a message over the websocket, and does not expect a response.
+  The `send_message/2` function sends a message over the websocket, and immediately returns.
   It is a `call`, and will return `:ok` if the socket was in a ready state and successfully sent the message, and an `{:error, reason}` tuple otherwise.
   Responses will be sent via the websocket as Nostr messages, for example an `["OK", <event_id>, <true|false>, <message>]` upon successful receipt by the relay.
 
@@ -81,7 +81,7 @@ defmodule NostrEx.Socket do
   end
 
   @doc """
-  Send a serialized message to the relay via the connection at this `pid`.
+  Send a serialized message to the relay via the connection at this relay name or `pid`.
   """
   @spec send_message(pid() | atom(), binary()) :: :ok | {:error, atom() | String.t()}
   def send_message(pid, text) when is_pid(pid) and is_binary(text) do

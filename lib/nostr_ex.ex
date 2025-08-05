@@ -65,7 +65,6 @@ defmodule NostrEx do
 
   def disconnect_relay(relay_name) when is_atom(relay_name), do: Client.close_conn(relay_name)
 
-  # Helper function to convert URL to registered atom name
   @spec url_to_relay_name(binary()) :: {:ok, atom()} | {:error, String.t()}
   defp url_to_relay_name(relay_url) do
     case URI.parse(relay_url) do

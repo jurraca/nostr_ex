@@ -1,6 +1,6 @@
 defmodule NostrEx.Nip05 do
   @moduledoc """
-  Verify DNS identifiers from profiles.
+  Verify DNS identifiers from profiles according to [NIP-05](https://github.com/nostr-protocol/nips/blob/master/05.md).
   """
 
   @doc """

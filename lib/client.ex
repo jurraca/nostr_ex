@@ -8,8 +8,8 @@ defmodule NostrEx.Client do
 
   ## Event Creation and Signing
 
-      iex> Client.create_note("Hello", private_key)
-      "{\"content\":\"Hello\",\"created_at\":...}"
+      iex> Client.sign_and_send_event(%Event{...}, private_key)
+      {:ok, "abcd123f"}
 
   ## Subscription Management
 
