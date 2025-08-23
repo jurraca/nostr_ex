@@ -1,4 +1,3 @@
-
 defmodule NostrEx.Signer.LocalTest do
   use ExUnit.Case, async: true
   

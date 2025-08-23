@@ -22,12 +22,12 @@ defmodule NostrEx.Signer.Local do
     GenServer.start_link(__MODULE__, private_key, opts)
   end
 
-  @impl Signer 
+  @impl Signer
   def sign_event(signer_pid, event) do
     GenServer.call(signer_pid, {:sign_event, event})
   end
 
-  @impl Signer 
+  @impl Signer
   def get_pubkey(signer_pid) do
     GenServer.call(signer_pid, :get_pubkey)
   end
