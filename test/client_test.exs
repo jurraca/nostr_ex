@@ -40,7 +40,7 @@ defmodule NostrEx.ClientTest do
 
   describe "sign event" do
     test "succeeds with private key" do
-      event = NostrEx.create_event(1, content: "test content")
+      {:ok, event} = NostrEx.create_event(1, content: "test content")
       assert {:ok, signed_event} = NostrEx.sign_event(event, @privkey)
       assert signed_event.kind == event.kind
       assert signed_event.content == event.content
@@ -50,7 +50,7 @@ defmodule NostrEx.ClientTest do
 
   describe "sign_and_serialize/2" do
     test "signs and serializes a valid event" do
-      event = NostrEx.create_event(1, content: "test content")
+      {:ok, event} = NostrEx.create_event(1, content: "test content")
       {:ok, event_id, result} = Client.sign_and_serialize(event, @privkey)
 
       assert is_binary(result)

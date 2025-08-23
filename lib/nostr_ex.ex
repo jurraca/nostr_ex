@@ -97,20 +97,43 @@ defmodule NostrEx do
   Create event from `attrs`.
 
   `attrs` can be a map with atom keys or a keyword list.
+  
+  Returns `{:ok, event}` on success or `{:error, reason}` on failure.
+  
+  ## Examples
+  
+      iex> NostrEx.create_event(1, %{content: "hello"})
+      {:ok, %Nostr.Event{kind: 1, content: "hello", ...}}
+      
+      iex> NostrEx.create_event(1, content: "hello")
+      {:ok, %Nostr.Event{kind: 1, content: "hello", ...}}
+      
+      iex> NostrEx.create_event("invalid", %{})
+      {:error, "invalid kind: must be an integer, got: invalid"}
   """
-  def create_event(kind, %{} = attrs) do
-    Event.create(kind, Enum.into(attrs, []))
+  @spec create_event(integer(), map() | keyword()) :: {:ok, Event.t()} | {:error, String.t()}
+  def create_event(kind, attrs) when is_integer(kind) do
+      case attrs do
+        %{} = map_attrs ->
+          event = Event.create(kind, Enum.into(map_attrs, []))
+          {:ok, event}
+          
+        attrs when is_list(attrs) ->
+          if Keyword.keyword?(attrs) do
+            event = Event.create(kind, attrs)
+            {:ok, event}
+          else
+            {:error, "invalid attrs: must be a map or keyword list"}
+          end
+          
+        _ ->
+          {:error, "invalid attrs: must be a map or keyword list"}
+      end
   end
 
-  def create_event(kind, attrs) when is_list(attrs) do
-    if Keyword.keyword?(attrs) do
-      Event.create(kind, attrs)
-    else
-      {:error, "invalid attrs: must be a map or Keyword list with a `:kind` attribute"}
-    end
+  def create_event(kind, _attrs) do
+    {:error, "invalid kind: must be an integer, got: #{inspect(kind)}"}
   end
-
-  def create_event(_, _), do: {:error, "invalid attrs provided, must be a map or a keyword list"}
 
   @doc """
   Sign an event with a signer or private key.
