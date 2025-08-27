@@ -35,7 +35,7 @@ defmodule NostrEx.MixProject do
   defp docs do
     [
       authors: ["jurraca <julienu@pm.me>"],
-      main: "NostrEx",
+      main: "readme",
       api_reference: false,
       formatters: ["html"],
       source_ref: "v#{@version}",
