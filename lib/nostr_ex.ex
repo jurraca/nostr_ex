@@ -95,17 +95,18 @@ defmodule NostrEx do
   Create event from `attrs`.
 
   `attrs` can be a map with atom keys or a keyword list.
-  
   Returns `{:ok, event}` on success or `{:error, reason}` on failure.
-  
+
+  This function mainly wraps `Nostr.Event.create/2`. Use that if you want a function that raises.
+
   ## Examples
-  
+
       iex> NostrEx.create_event(1, %{content: "hello"})
       {:ok, %Nostr.Event{kind: 1, content: "hello", ...}}
-      
+
       iex> NostrEx.create_event(1, content: "hello")
       {:ok, %Nostr.Event{kind: 1, content: "hello", ...}}
-      
+
       iex> NostrEx.create_event("invalid", %{})
       {:error, "invalid kind: must be an integer, got: invalid"}
   """
