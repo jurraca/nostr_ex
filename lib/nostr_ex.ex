@@ -5,8 +5,7 @@ defmodule NostrEx do
   ## Quick Start
 
       # Connect to a relay (returns registered atom name)
-      NostrEx.connect_relay("wss://relay.example.com")
-      # => {:ok, :relay_example_com}
+      {:ok, :relay_example_com} = NostrEx.connect_relay("wss://relay.example.com")
 
       # Send a note
       {:ok, _event_id} = NostrEx.send_note("Hello Nostr!", private_key)

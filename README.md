@@ -20,7 +20,8 @@ end
 
 ```elixir
 # Connect to a relay
-{:ok, :relay_example_com} = NostrEx.connect_relay("wss://relay.example.com")
+iex(1)> NostrEx.connect_relay("wss://relay.example.com")
+{:ok, :relay_example_com}
 ```
 
 Relays are tracked by name as atoms via the `RelayRegistry`. All public facing functions expect this name as input, so you don't have to worry about PIDs. See `RelayManager.registered_names/0`.
@@ -28,20 +29,24 @@ Relays are tracked by name as atoms via the `RelayRegistry`. All public facing f
 ### Sending Notes
 
 ```elixir
-# Send a simple note
-iex(1)> NostrEx.send_note("Hello Nostr!", private_key)
+# Create a private key, and send a simple note
+iex(2)> privkey = :crypto.strong_rand_bytes(32) |> Base.encode16(case: :lower)
+"6dba065ffb6f51b4023d7d24a0c91c125c42ceff344d744d00f3c76e6cb5e03e"
+# returns the event ID
+iex(3)> NostrEx.send_note("Hello Joe!", private_key)
+{:ok, "ed84a5d733a54fc11cb85c4251a007699b223dba1c86b758cdf03a8235bc42ff"}
 
 # Create an event with kind and attrs
-iex(2)> NostrEx.create_event(1, %{content: "hello joe"})
-%Nostr.Event{
+iex(4)> NostrEx.create_event(1, %{content: "hello mike"})
+{:ok, %Nostr.Event{
   id: nil,
   pubkey: nil,
   kind: 1,
   tags: [],
   created_at: ~U[2025-08-03 15:29:15.261264Z],
-  content: "hello joe",
+  content: "hello mike",
   sig: nil
-}
+}}
 
 # Sign the event with your hex-encoded private key
 iex(3)> {:ok, signed} = NostrEx.sign_event(event, private_key)
@@ -52,7 +57,7 @@ iex(3)> {:ok, signed} = NostrEx.sign_event(event, private_key)
    kind: 1,
    tags: [],
    created_at: ~U[2025-08-03 15:33:30.652067Z],
-   content: "hello joe",
+   content: "hello mike",
    sig: "60278f60548d5fa49841e0b7518201625aba9a9cf1cdc6d72621290b1943c21971d90c5ca3c2fba49b00ef84f488bac8bc0932c8ccc5ba5e3af2121ce7ad67c9"
  }}
 
@@ -77,11 +82,8 @@ and similarly unsubscribe the current process with `Registry.unregister(NostrEx.
 # Subscribe to a user's notes
 NostrEx.subscribe_notes(pubkey)
 
-# Get a user's profile
+# Subscribe to a user's profile
 NostrEx.subscribe_profile(pubkey)
-
-# Get a user's following list
-NostrEx.subscribe_follows(pubkey)
 
 # Custom subscription with filters
 NostrEx.send_subscription([
@@ -109,7 +111,7 @@ NostrEx uses a supervision tree with the following components:
 - `RelayRegistry`: Registry for mapping relay names to connection pids
 
 This library is built on [Sgiath](https://github.com/Sgiath)'s [nostr_lib](https://github.com/Sgiath/nostr-lib) library.
-This dependency compiles the libsecp256k1 C library for cryptographic operations, 
+This dependency compiles the libsecp256k1 C library for cryptographic operations,
 therefore you will need a C compiler to build this project.
 
 ## Contributing
