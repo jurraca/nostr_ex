@@ -9,9 +9,14 @@ defmodule NostrEx.MixProject do
       elixir: "~> 1.16",
       start_permanent: Mix.env() == :prod,
       deps: deps(),
+      description: description(),
       package: package(),
       docs: docs()
     ]
+  end
+
+  defp description() do
+    "A Nostr client library written in Elixir. Uses `nostr_lib` and `mint` to connect to relays, send events, and subscribe to relays."
   end
 
   defp package do
