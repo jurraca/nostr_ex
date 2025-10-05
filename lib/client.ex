@@ -163,8 +163,8 @@ defmodule NostrEx.Client do
   Returns `{:ok, [Filter.t()]}` on success.
   """
   @spec create_filters(keyword() | [keyword()]) :: {:ok, [Filter.t()]} | {:error, String.t()}
-  def create_filters(opts) when is_list(opts) do
-    case opts do
+  def create_filters(filters) when is_list(filters) do
+    case filters do
       [] ->
         {:ok, []}
 
@@ -172,7 +172,7 @@ defmodule NostrEx.Client do
         filter = Map.merge(%Filter{}, Enum.into(opts, %{}))
         {:ok, [filter]}
 
-      filters when is_list(hd(filters)) ->
+      [f | _rest] when is_list(f) ->
         case Enum.all?(filters, &Keyword.keyword?/1) do
           true ->
             processed_filters = Enum.map(filters, &Map.merge(%Filter{}, Enum.into(&1, %{})))
@@ -182,7 +182,7 @@ defmodule NostrEx.Client do
             {:error, "Invalid filter format - all elements must be keyword lists"}
         end
 
-      filters when is_map(hd(filters)) ->
+      [f | _rest] when is_map(f) ->
           processed_filters = Enum.map(filters, &Map.merge(%Filter{}, &1))
           {:ok, processed_filters}
 
