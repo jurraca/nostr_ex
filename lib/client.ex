@@ -182,6 +182,10 @@ defmodule NostrEx.Client do
             {:error, "Invalid filter format - all elements must be keyword lists"}
         end
 
+      filters when is_map(hd(filters)) ->
+          processed_filters = Enum.map(filters, &Map.merge(%Filter{}, &1))
+          {:ok, processed_filters}
+
       _ ->
         {:error, "Invalid filter format"}
     end
