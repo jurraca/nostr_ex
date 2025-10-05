@@ -6,7 +6,10 @@ defmodule NostrEx.Utils do
     {oks, errors} = Enum.split_with(results, &(match?({:ok, _}, &1) || match?(:ok, &1)))
 
     case errors do
-      [] -> {:ok, Enum.map(oks, fn {:ok, v} -> v end)}
+      [] -> {:ok, Enum.map(oks, fn
+        {:ok, v} -> v
+        :ok -> :ok
+      end)}
       errors -> {:error, errors |> Enum.reject(&is_nil/1) |> Enum.map(fn {:error, e} -> e end)}
     end
   end
