@@ -220,7 +220,7 @@ defmodule NostrEx.Socket do
             |> Message.close()
             |> Message.serialize()
 
-          _ = send_close_frame(state.name, close_message)
+          _ = send_close_frame(state, close_message)
         end)
     end
 
