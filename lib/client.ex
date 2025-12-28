@@ -169,7 +169,7 @@ defmodule NostrEx.Client do
         {:ok, []}
 
       [{_key, _value} | _] ->
-        filter = Map.merge(%Filter{}, Enum.into(opts, %{}))
+        filter = Map.merge(%Filter{}, Enum.into(filters, %{}))
         {:ok, [filter]}
 
       [f | _rest] when is_list(f) ->
