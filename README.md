@@ -14,6 +14,13 @@ def deps do
 end
 ```
 
+**Required dependencies**:
+
+`nostr_ex` depends on `secp256k1`, bitcoin-core's C implementation of the secp256k1 curve, via Sgiath's [Elixir NIF](https://github.com/Sgiath/secp256k1) for this library. To compile the dependency successfully:
+- on Linux, you'll need `autotools` installed
+- on MacOS, you may need `make`, `autoconf` and `autobuild`.
+- using Nix, all you need is `autoreconfHook` in your environment. It is included in the project devShell, see `nix/shell.nix`.
+
 ## Usage
 
 ### Connecting to Relays
