@@ -1,6 +1,8 @@
 defmodule NostrEx.Signer.LocalTest do
   use ExUnit.Case, async: true
   
+  import ExUnit.CaptureLog
+
   alias NostrEx.Signer.Local
   alias Nostr.Event
   
@@ -63,7 +65,9 @@ defmodule NostrEx.Signer.LocalTest do
       event = Event.create(1, content: "test")
       invalid_event = %Event{event | id: "invalid"}
       
-      assert {:error, "Failed to sign event"} = Local.sign_event(signer_pid, invalid_event)
+      {result, log} = with_log(fn -> Local.sign_event(signer_pid, invalid_event) end)
+      assert {:error, "Failed to sign event: Event ID isn't correct"} = result
+      assert log =~ "Event ID isn't correct"
     end
   end
 end

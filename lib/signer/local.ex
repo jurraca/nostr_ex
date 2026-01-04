@@ -80,9 +80,10 @@ defmodule NostrEx.Signer.Local do
       signed_event = Event.sign(event, private_key)
       {:ok, signed_event}
     rescue
-      error ->
-        Logger.error("Failed to sign event: #{inspect(error)}")
-        {:error, "Failed to sign event"}
+      error in RuntimeError ->
+        msg = "Failed to sign event: " <> error.message
+        Logger.error(msg)
+        {:error, msg}
     end
   end
 end
