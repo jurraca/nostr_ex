@@ -16,9 +16,7 @@ defmodule NostrEx.Socket do
     }
   ```
 
-  The `send_message/2` function sends a message over the websocket, and immediately returns.
-  It is a `call`, and will return `:ok` if the socket was in a ready state and successfully sent the message, and an `{:error, reason}` tuple otherwise.
-  Responses will be sent via the websocket as Nostr messages, for example an `["OK", <event_id>, <true|false>, <message>]` upon successful receipt by the relay.
+  The `send_message/2` is a `call`, and will return `:ok` if the socket was in a ready state and successfully sent the message, and an `{:error, reason}` tuple otherwise.
 
   Before terminating, the process will update the `RelayAgent` to delete subscription info associated with this relay.
   """
