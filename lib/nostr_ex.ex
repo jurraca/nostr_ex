@@ -155,8 +155,8 @@ defmodule NostrEx do
       iex> NostrEx.send_note("Hello Nostr!", private_key)
       {:ok, "abcd1231f..."}
 
-      iex> signer = NostrEx.Signer.PrivateKey.new(private_key)
-      iex> NostrEx.send_note("Hello Nostr!", signer)
+      iex> {:ok, signer_pid} = NostrEx.Signer.Local.start_link(private_key)
+      iex> NostrEx.send_note("Hello Nostr!", signer_pid)
       {:ok, "abcd1231f..."}
 
       iex> NostrEx.send_note("Hello specific relay!", private_key, send_via: ["relay_example_com"])
