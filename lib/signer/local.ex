@@ -15,8 +15,6 @@ defmodule NostrEx.Signer.Local do
 
   @behaviour Signer
 
-  defstruct [:private_key, :pubkey]
-
   @spec start_link(binary(), keyword()) :: {:ok, pid()} | {:error, term()}
   def start_link(private_key, opts \\ []) when is_binary(private_key) do
     GenServer.start_link(__MODULE__, private_key, opts)
@@ -48,7 +46,7 @@ defmodule NostrEx.Signer.Local do
   @impl GenServer
   def init(private_key) do
     pubkey = Nostr.Crypto.pubkey(private_key)
-    state = %__MODULE__{private_key: private_key, pubkey: pubkey}
+    state = %{private_key: private_key, pubkey: pubkey}
     {:ok, state}
   end
 
