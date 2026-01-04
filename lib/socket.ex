@@ -28,7 +28,7 @@ defmodule NostrEx.Socket do
   require Logger
   require Mint.HTTP
 
-  alias NostrEx.{RelayAgent, RelayManager, RelayRegistry}
+  alias NostrEx.{RelayAgent, RelayRegistry}
   alias Nostr.Message
 
   @default_connect_timeout 3_000
@@ -84,15 +84,12 @@ defmodule NostrEx.Socket do
   Send a serialized message to the relay via the connection at this relay name or `pid`.
   """
   @spec send_message(pid() | atom(), binary()) :: :ok | {:error, atom() | String.t()}
-  def send_message(pid, text) when is_pid(pid) and is_binary(text) do
-    GenServer.call(pid, {:send_text, text}, @default_call_timeout)
+  def send_message(relay_name, text) when is_atom(relay_name) and is_binary(text) do
+    via_tuple(relay_name) |> GenServer.call({:send_text, text}, @default_call_timeout)
   end
 
-  def send_message(relay_name, text) when is_atom(relay_name) and is_binary(text) do
-    case RelayManager.lookup(relay_name) do
-      {:ok, pid} -> send_message(pid, text)
-      error -> error
-    end
+  def send_message(pid, text) when is_pid(pid) and is_binary(text) do
+    GenServer.call(pid, {:send_text, text}, @default_call_timeout)
   end
 
   def send_message(relay_name, _text) do
