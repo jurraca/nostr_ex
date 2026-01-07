@@ -165,7 +165,9 @@ defmodule NostrEx do
       {:ok, "event_id_abc123..."}
   """
   @spec send_event(Event.t(), keyword()) :: {:ok, event_id()} | {:error, String.t() | [String.t()]}
-  def send_event(%Event{} = event, opts \\ []), do: Client.send_event(event, opts)
+  def send_event(event, opts \\ [])
+  def send_event(%Event{sig: nil}, _opts), do: {:error, "event must be signed before sending"}
+  def send_event(%Event{} = event, opts), do: Client.send_event(event, opts)
 
   # Subscriptions
 

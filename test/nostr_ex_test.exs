@@ -39,6 +39,13 @@ defmodule NostrExTest do
     end
   end
 
+  describe "send_event/2" do
+    test "returns error if event is not signed" do
+      {:ok, event} = NostrEx.create_event(1, content: "unsigned")
+      assert {:error, "event must be signed before sending"} = NostrEx.send_event(event)
+    end
+  end
+
   describe "create_sub/1" do
     test "creates subscription from keyword filter" do
       {:ok, sub} = NostrEx.create_sub(authors: ["abc123"], kinds: [1])
