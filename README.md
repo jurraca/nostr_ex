@@ -27,7 +27,7 @@ end
 
 ```elixir
 # Connect to a relay
-iex(1)> NostrEx.connect_relay("wss://relay.example.com")
+iex(1)> NostrEx.connect("wss://relay.example.com")
 {:ok, :relay_example_com}
 ```
 
@@ -36,12 +36,9 @@ Relays are tracked by name as atoms via the `RelayRegistry`. All public facing f
 ### Sending Notes
 
 ```elixir
-# Create a private key, and send a simple note
+# Create a private key, and send a simple note, returns the event ID
 iex(2)> privkey = :crypto.strong_rand_bytes(32) |> Base.encode16(case: :lower)
 "6dba065ffb6f51b4023d7d24a0c91c125c42ceff344d744d00f3c76e6cb5e03e"
-# returns the event ID
-iex(3)> NostrEx.send_note("Hello Joe!", private_key)
-{:ok, "ed84a5d733a54fc11cb85c4251a007699b223dba1c86b758cdf03a8235bc42ff"}
 
 # Create an event with kind and attrs
 iex(4)> NostrEx.create_event(1, %{content: "hello mike"})
