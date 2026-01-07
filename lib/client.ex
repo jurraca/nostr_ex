@@ -1,20 +1,18 @@
 defmodule NostrEx.Client do
   @moduledoc """
-  Client operations for the Nostr protocol.
+  Internal client operations for the Nostr protocol.
 
-  This module handles the core protocol operations like signing events,
-  serializing messages, and managing the WebSocket communication layer.
-  Most users should use the higher-level `NostrEx` module instead.
+  This module provides the low-level implementation for NostrEx.
+  **Most users should use the `NostrEx` module instead.**
 
-  ## Event Creation and Signing
+  ## Public API (via NostrEx)
 
-      iex> Client.sign_and_send_event(%Event{...}, private_key)
-      {:ok, "abcd123f"}
-
-  ## Subscription Management
-
-      iex> Client.send_sub([authors: [pubkey], kinds: [1]])
-      {:ok, "subscription_id"}
+  - `NostrEx.create_event/2` - Create events
+  - `NostrEx.sign_event/2` - Sign events  
+  - `NostrEx.send_event/2` - Send signed events
+  - `NostrEx.create_sub/1` - Create subscriptions
+  - `NostrEx.send_sub/2` - Send subscriptions
+  - `NostrEx.close_sub/1` - Close subscriptions
   """
 
   alias Nostr.{Event, Filter, Message}
@@ -40,7 +38,7 @@ defmodule NostrEx.Client do
          payload <- serialize(event) do
       {oks, errors} =
         relay_names
-        |> Enum.map(&send_event_serialized(&1, payload))
+        |> Enum.map(&send_to_relay(&1, payload))
         |> Enum.split_with(&match?(:ok, &1))
 
       count_errors = Enum.count(errors)
@@ -78,27 +76,40 @@ defmodule NostrEx.Client do
   def sign_and_send_event(_event, _signer_or_privkey, _opts),
     do: {:error, "invalid event provided, must be an %Event{} struct."}
 
-  @doc """
-  Send a serialized payload to a specific relay.
-
-  `relay` must be a relay name registered in the RelayRegistry.
-  """
-  @spec send_event_serialized(atom(), binary()) :: :ok | {:error, atom() | String.t()}
-  def send_event_serialized(relay, payload) when is_binary(payload) do
+  @spec send_to_relay(atom(), binary()) :: :ok | {:error, atom() | String.t()}
+  defp send_to_relay(relay, payload) when is_binary(payload) do
     Socket.send_message(relay, payload)
   end
 
   # === Subscription Management ===
 
   @doc """
-  Send a subscription request.
+  Send a Subscription struct to relays.
 
-  `filter` can be:
-  - A keyword list of filter arguments
-  - A list of keyword lists for multiple filters
-
-  Returns `{:ok, subscription_id}` on success.
+  ## Options
+  - `:send_via` - List of relay names. Defaults to all connected relays.
   """
+  @spec send_subscription(NostrEx.Subscription.t(), keyword()) :: :ok | {:error, String.t()}
+  def send_subscription(%NostrEx.Subscription{id: sub_id, filters: filters}, opts \\ []) do
+    message = serialize_subscription(sub_id, filters)
+
+    relay_names = get_relays(opts[:send_via])
+
+    case relay_names do
+      [] ->
+        {:error, "no relays connected"}
+
+      _ ->
+        Enum.each(relay_names, fn relay_name ->
+          subscribe_to_relay(relay_name, sub_id, message)
+        end)
+
+        :ok
+    end
+  end
+
+  @doc false
+  @deprecated "Use NostrEx.create_sub/1 and NostrEx.send_sub/2 instead"
   @spec send_sub(keyword() | [keyword()], keyword()) :: {:ok, String.t()} | {:error, String.t()}
   def send_sub(filter, opts \\ []) do
     with {:ok, filters} <- create_filters(filter),
@@ -107,7 +118,7 @@ defmodule NostrEx.Client do
       opts[:send_via]
       |> get_relays()
       |> Enum.each(fn relay_name ->
-        subscribe(relay_name, sub_id, message)
+        subscribe_to_relay(relay_name, sub_id, message)
       end)
 
       {:ok, sub_id}
@@ -128,7 +139,7 @@ defmodule NostrEx.Client do
          request = Message.close(sub_id) |> Message.serialize() do
       relays
       |> Enum.map(fn relay_name ->
-        case send_event_serialized(relay_name, request) do
+        case send_to_relay(relay_name, request) do
           {:ok, _} -> RelayAgent.delete_subscription(relay_name, sub_id)
           err -> err
         end
@@ -157,13 +168,8 @@ defmodule NostrEx.Client do
   def close_conn(pid) when is_pid(pid), do: DynamicSupervisor.terminate_child(RelayManager, pid)
   def close_conn(_), do: {:error, :not_found}
 
-  @doc """
-  Create filters from keyword list(s).
-
-  Returns `{:ok, [Filter.t()]}` on success.
-  """
   @spec create_filters(keyword() | [keyword()]) :: {:ok, [Filter.t()]} | {:error, String.t()}
-  def create_filters(filters) when is_list(filters) do
+  defp create_filters(filters) when is_list(filters) do
     case filters do
       [] ->
         {:ok, []}
@@ -191,15 +197,10 @@ defmodule NostrEx.Client do
     end
   end
 
-  def create_filters(_opts), do: {:error, "Invalid filter format"}
+  defp create_filters(_opts), do: {:error, "Invalid filter format"}
 
-  @doc """
-  Create a subscription message with the given filters.
-
-  Returns `{:ok, subscription_id, serialized_message}`.
-  """
   @spec create_subscription_message([Filter.t()]) :: {:ok, String.t(), binary()}
-  def create_subscription_message(filters) when is_list(filters) do
+  defp create_subscription_message(filters) when is_list(filters) do
     sub_id = :crypto.strong_rand_bytes(32) |> Base.encode16(case: :lower)
 
     msg =
@@ -210,18 +211,13 @@ defmodule NostrEx.Client do
     {:ok, sub_id, msg}
   end
 
-  @doc """
-  Subscribe to a relay with a specific subscription ID and message.
-  """
-  @spec subscribe(atom(), String.t(), binary()) :: :ok | {:error, String.t()}
-  def subscribe(relay_name, sub_id, payload) when is_binary(sub_id) do
-    with :ok <- send_event_serialized(relay_name, payload),
+  @spec subscribe_to_relay(atom(), String.t(), binary()) :: :ok | {:error, String.t()}
+  defp subscribe_to_relay(relay_name, sub_id, payload) when is_binary(sub_id) do
+    with :ok <- send_to_relay(relay_name, payload),
          :ok <- RelayAgent.update(relay_name, sub_id) do
       :ok
     end
   end
-
-  def subscribe(_, sub_id, _), do: {:error, "invalid sub_id format, got #{sub_id}"}
 
   def sign_event(%Event{} = event, privkey) when is_binary(privkey) do
     try do
@@ -267,6 +263,12 @@ defmodule NostrEx.Client do
   def serialize(%Event{} = signed_event) do
     signed_event
     |> Message.create_event()
+    |> Message.serialize()
+  end
+
+  defp serialize_subscription(sub_id, filters) do
+    filters
+    |> Message.request(sub_id)
     |> Message.serialize()
   end
 
