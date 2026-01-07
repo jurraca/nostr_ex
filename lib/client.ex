@@ -168,36 +168,24 @@ defmodule NostrEx.Client do
   def close_conn(pid) when is_pid(pid), do: DynamicSupervisor.terminate_child(RelayManager, pid)
   def close_conn(_), do: {:error, :not_found}
 
-  @spec create_filters(keyword() | [keyword()]) :: {:ok, [Filter.t()]} | {:error, String.t()}
+  @spec create_filters(keyword() | [keyword()] | [map()]) :: {:ok, [Filter.t()]} | {:error, String.t()}
+  defp create_filters([]), do: {:error, "empty filters"}
   defp create_filters(filters) when is_list(filters) do
-    case filters do
-      [] ->
-        {:ok, []}
+    cond do
+      Keyword.keyword?(filters) ->
+        {:ok, [Map.merge(%Filter{}, Map.new(filters))]}
 
-      [{_key, _value} | _] ->
-        filter = Map.merge(%Filter{}, Enum.into(filters, %{}))
-        {:ok, [filter]}
+      Enum.all?(filters, &Keyword.keyword?/1) ->
+        {:ok, Enum.map(filters, &Map.merge(%Filter{}, Map.new(&1)))}
 
-      [f | _rest] when is_list(f) ->
-        case Enum.all?(filters, &Keyword.keyword?/1) do
-          true ->
-            processed_filters = Enum.map(filters, &Map.merge(%Filter{}, Enum.into(&1, %{})))
-            {:ok, processed_filters}
+      Enum.all?(filters, &is_map/1) ->
+        {:ok, Enum.map(filters, &Map.merge(%Filter{}, &1))}
 
-          false ->
-            {:error, "Invalid filter format - all elements must be keyword lists"}
-        end
-
-      [f | _rest] when is_map(f) ->
-          processed_filters = Enum.map(filters, &Map.merge(%Filter{}, &1))
-          {:ok, processed_filters}
-
-      _ ->
+      true ->
         {:error, "Invalid filter format"}
     end
   end
-
-  defp create_filters(_opts), do: {:error, "Invalid filter format"}
+  defp create_filters(_), do: {:error, "Invalid filter format"}
 
   @spec create_subscription_message([Filter.t()]) :: {:ok, String.t(), binary()}
   defp create_subscription_message(filters) when is_list(filters) do
