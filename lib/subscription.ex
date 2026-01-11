@@ -53,7 +53,7 @@ defmodule NostrEx.Subscription do
       sub = %__MODULE__{
         id: generate_id(),
         filters: filter_structs,
-        created_at: System.os_time(:second)
+        created_at: DateTime.utc_now() |> DateTime.to_unix()
       }
 
       {:ok, sub}
