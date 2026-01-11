@@ -141,7 +141,6 @@ defmodule NostrEx.Socket do
         {:reply, :ok, new_state}
 
       {:error, reason, new_state} ->
-        Logger.warning("Failed to send message: #{inspect(reason)}")
         {:reply, {:error, reason}, new_state}
     end
   end
@@ -164,7 +163,7 @@ defmodule NostrEx.Socket do
   @spec handle_info(term(), %__MODULE__{}) ::
           {:noreply, %__MODULE__{}} | {:stop, :normal, %__MODULE__{}}
   def handle_info({:EXIT, _pid, reason}, state) do
-    Logger.info("Relay process exited: #{inspect(reason)}")
+    Logger.notice("Relay process exited: #{inspect(reason)}")
     {:stop, :normal, state}
   end
 
@@ -304,8 +303,6 @@ defmodule NostrEx.Socket do
         |> reply_to_caller({:ok, :connected})
 
       {:error, conn, reason} ->
-        Logger.error("WebSocket creation failed: #{inspect(reason)}")
-
         %{state | conn: conn}
         |> reply_to_caller({:error, reason})
     end
@@ -319,8 +316,6 @@ defmodule NostrEx.Socket do
         |> handle_frames(frames)
 
       {:error, websocket, reason} ->
-        Logger.error("WebSocket decode error: #{inspect(reason)}")
-
         %{state | websocket: websocket}
         |> reply_to_caller({:error, reason})
     end
@@ -359,8 +354,7 @@ defmodule NostrEx.Socket do
     end
   end
 
-  defp handle_frame({:close, _code, reason}, state) do
-    Logger.debug("Received close frame: #{inspect(reason)}")
+  defp handle_frame({:close, _code, _reason}, state) do
     %{state | closing?: true}
   end
 
@@ -373,27 +367,26 @@ defmodule NostrEx.Socket do
   end
 
   defp handle_frame(frame, state) do
-    Logger.debug("Unexpected frame received: #{inspect(frame)}")
+    Logger.info("Unexpected frame received: #{inspect(frame)}")
     state
   end
 
   @spec handle_nostr_message(tuple() | atom(), %__MODULE__{}) :: :ok
   defp handle_nostr_message({:event, subscription_id, _} = event, _state) do
-    Logger.debug("Received event for subscription #{subscription_id}")
     registry_dispatch(subscription_id, event)
   end
 
   defp handle_nostr_message({:notice, message}, state) do
-    Logger.info("NOTICE from #{state.uri.host}: #{message}")
+    Logger.notice("NOTICE from #{state.uri.host}: #{message}")
   end
 
   defp handle_nostr_message({:eose, subscription_id}, state) do
-    Logger.debug("End of stored events for subscription #{subscription_id}")
+    Logger.info("End of stored events for subscription #{subscription_id}")
     registry_dispatch(subscription_id, {:eose, subscription_id, state.uri.host})
   end
 
   defp handle_nostr_message({:close, sub_id}, state) do
-    Logger.debug("Subscription #{sub_id} closed by relay")
+    Logger.info("Subscription #{sub_id} closed by relay")
     RelayAgent.delete_subscription(state.name, sub_id)
   end
 
