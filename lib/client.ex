@@ -89,11 +89,11 @@ defmodule NostrEx.Client do
   ## Options
   - `:send_via` - List of relay names. Defaults to all connected relays.
   """
-  @spec send_subscription(NostrEx.Subscription.t(), keyword()) :: :ok | {:error, String.t()}
-  def send_subscription(%NostrEx.Subscription{id: sub_id, filters: filters}, opts \\ []) do
+  @spec send_sub(NostrEx.Subscription.t(), keyword()) :: :ok | {:error, String.t()}
+  def send_sub(%NostrEx.Subscription{id: sub_id, filters: filters}, opts \\ []) do
     message = serialize_subscription(sub_id, filters)
-
     relay_names = get_relays(opts[:send_via])
+    {:ok, _pid} = Registry.register(NostrEx.PubSub, sub_id, nil)
 
     case relay_names do
       [] ->
@@ -104,26 +104,7 @@ defmodule NostrEx.Client do
           subscribe_to_relay(relay_name, sub_id, message)
         end)
 
-        :ok
-    end
-  end
-
-  @doc false
-  @deprecated "Use NostrEx.create_sub/1 and NostrEx.send_sub/2 instead"
-  @spec send_sub(keyword() | [keyword()], keyword()) :: {:ok, String.t()} | {:error, String.t()}
-  def send_sub(filter, opts \\ []) do
-    with {:ok, filters} <- create_filters(filter),
-         {:ok, sub_id, message} <- create_subscription_message(filters),
-         {:ok, _pid} <- Registry.register(NostrEx.PubSub, sub_id, nil) do
-      opts[:send_via]
-      |> get_relays()
-      |> Enum.each(fn relay_name ->
-        subscribe_to_relay(relay_name, sub_id, message)
-      end)
-
-      {:ok, sub_id}
-    else
-      {:error, reason} -> {:error, reason}
+        {:ok, sub_id}
     end
   end
 

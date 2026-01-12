@@ -208,7 +208,7 @@ defmodule NostrEx do
       :ok
   """
   @spec send_sub(Subscription.t(), keyword()) :: :ok | {:error, String.t()}
-  def send_sub(%Subscription{} = sub, opts \\ []), do: Client.send_subscription(sub, opts)
+  def send_sub(%Subscription{} = sub, opts \\ []), do: Client.send_sub(sub, opts)
 
   @doc """
   Close a subscription.
