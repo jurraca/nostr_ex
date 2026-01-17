@@ -83,14 +83,12 @@ You can subscribe to any subscription ID by calling
 and similarly unsubscribe the current process with `Registry.unregister(NostrEx.PubSub, sub_id)`.
 
 ```elixir
-# Subscribe to a user's notes
-NostrEx.subscribe_notes(pubkey)
+# Create a subscription
+now = DateTime.utc_now() |> DateTime.to_unix()
+NostrEx.create_sub([kinds: [1], since: now])
 
-# Subscribe to a user's profile
-NostrEx.subscribe_profile(pubkey)
-
-# Custom subscription with filters
-NostrEx.send_subscription([
+# Send a subscription with filters
+NostrEx.send_sub([
   authors: [pubkey],
   kinds: [30023],
   since: 1753135689
