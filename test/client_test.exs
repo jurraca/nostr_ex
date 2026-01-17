@@ -109,7 +109,7 @@ defmodule NostrEx.ClientTest do
         created_at: DateTime.utc_now()
       }
 
-      assert {:error, "no relays connected"} = Client.send_subscription(sub)
+      assert {:error, "no relays connected"} = Client.send_sub(sub)
     end
   end
 

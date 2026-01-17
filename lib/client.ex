@@ -15,7 +15,7 @@ defmodule NostrEx.Client do
   - `NostrEx.close_sub/1` - Close subscriptions
   """
 
-  alias Nostr.{Event, Filter, Message}
+  alias Nostr.{Event, Message}
   alias NostrEx.{RelayAgent, RelayManager, Socket, Utils}
 
 
