@@ -18,7 +18,6 @@ defmodule NostrEx.Client do
   alias Nostr.{Event, Filter, Message}
   alias NostrEx.{RelayAgent, RelayManager, Socket, Utils}
 
-  require Logger
 
   # === Event Publishing ===
 
@@ -28,34 +27,39 @@ defmodule NostrEx.Client do
   ## Options
   - `:send_via` - List of relays to send the event to. Defaults to all connected relays.
   """
-  @spec send_event(Event.t(), keyword()) ::
-          {:ok, binary()} | {:error, String.t() | [String.t()]}
+  @type send_result ::
+          {:ok, event_id :: binary(), failures :: [{atom(), term()}]}
+          | {:error, failures :: [{atom(), term()}]}
+
+  @spec send_event(Event.t(), keyword()) :: send_result()
   def send_event(event, opts \\ [])
 
   def send_event(%Nostr.Event{} = event, opts) do
-    with relay_names = get_relays(opts[:send_via]),
-         true <- relay_names != [],
-         payload <- serialize(event) do
-      {oks, errors} =
-        relay_names
-        |> Enum.map(&send_to_relay(&1, payload))
-        |> Enum.split_with(&match?(:ok, &1))
+    relay_names = get_relays(opts[:send_via])
 
-      count_errors = Enum.count(errors)
-      cond do
-        oks == [] ->
-          errors = Keyword.values(errors)
-          Logger.error("#{count_errors} send(s) failed with errors: #{Enum.join(errors, ", ")}")
-          {:error, errors}
-        errors != [] ->
-          Logger.error("#{event.id}: #{Enum.count(oks)} succeeded, #{count_errors} send(s) failed with errors: #{Enum.join(errors, ", ")}")
-          {:ok, event.id}
-        true ->
-          {:ok, event.id}
-      end
+    if relay_names == [] do
+      {:error, [{:no_relays, "no valid relays found, got: #{inspect(opts[:send_via])}"}]}
     else
-      {:error, _} = err -> err
-      false -> {:error, "no valid relays found, got: #{inspect(opts[:send_via])}"}
+      payload = serialize(event)
+
+      results =
+        relay_names
+        |> Enum.map(fn relay ->
+          case send_to_relay(relay, payload) do
+            :ok -> {:ok, relay}
+            {:error, reason} -> {:error, relay, reason}
+          end
+        end)
+
+      {successes, failures} =
+        Enum.split_with(results, &match?({:ok, _}, &1))
+
+      failure_tuples = Enum.map(failures, fn {:error, relay, reason} -> {relay, reason} end)
+
+      case successes do
+        [] -> {:error, failure_tuples}
+        _ -> {:ok, event.id, failure_tuples}
+      end
     end
   end
 
@@ -64,17 +68,16 @@ defmodule NostrEx.Client do
   """
   def sign_and_send_event(event, signer_or_privkey, opts \\ [])
 
-  @spec sign_and_send_event(Event.t(), binary() | struct(), keyword()) ::
-          {:ok, binary()} | {:error, String.t() | [String.t()]}
+  @spec sign_and_send_event(Event.t(), binary() | struct(), keyword()) :: send_result()
   def sign_and_send_event(%Event{} = event, signer_or_privkey, opts) do
     case sign_event(event, signer_or_privkey) do
       {:ok, signed_event} -> send_event(signed_event, opts)
-      {:error, reason} -> {:error, reason}
+      {:error, reason} -> {:error, [{:signing_failed, reason}]}
     end
   end
 
   def sign_and_send_event(_event, _signer_or_privkey, _opts),
-    do: {:error, "invalid event provided, must be an %Event{} struct."}
+    do: {:error, [{:invalid_event, "must be an %Event{} struct"}]}
 
   @spec send_to_relay(atom(), binary()) :: :ok | {:error, atom() | String.t()}
   defp send_to_relay(relay, payload) when is_binary(payload) do
@@ -215,19 +218,15 @@ defmodule NostrEx.Client do
   defp get_relays(:all), do: RelayManager.registered_names()
 
   defp get_relays([_h | _t] = relay_list) do
-  {oks, errors} =
-    relay_list
-    |> Enum.map(&normalize(&1))
-    |> Enum.split_with(&is_atom(&1))
+    {oks, _errors} =
+      relay_list
+      |> Enum.map(&normalize(&1))
+      |> Enum.split_with(&is_atom(&1))
 
-    Logger.error(Enum.join(errors, ", "))
     oks
   end
 
-  defp get_relays(relay_list) do
-    Logger.error("invalid relay list provided, got: #{Enum.join(relay_list, ", ")}")
-    []
-  end
+  defp get_relays(_relay_list), do: []
 
   defp normalize(relay) do
     cond do
