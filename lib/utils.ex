@@ -1,4 +1,6 @@
 defmodule NostrEx.Utils do
+  @moduledoc false
+
   @doc """
   Takes a host name, returns a normalized string for use as a Registry key.
   Example: "relay.damus.io" -> "relay.damus.io"
