@@ -84,7 +84,7 @@ defmodule NostrExTest do
     end
 
     test "disconnect returns error for non-existent relay" do
-      assert {:error, :not_found} = NostrEx.disconnect(:nonexistent_relay)
+      assert {:error, :not_found} = NostrEx.disconnect("nonexistent_relay")
     end
   end
 

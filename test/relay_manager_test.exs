@@ -53,19 +53,24 @@ defmodule NostrEx.RelayManagerTest do
   end
 
   describe "disconnect" do
-    test "disconnect by name returns error for string arguments" do
-      assert {:error, _msg} = RelayManager.disconnect("non_existent_relay")
+    test "disconnect by name returns error for non-existent string relay" do
+      assert {:error, :not_found} = RelayManager.disconnect("non_existent_relay")
     end
 
-    test "disconnect by atom returns error for non-existent relay" do
-      assert {:error, :not_found} = RelayManager.disconnect(:non_existent_relay)
+    test "disconnect by atom returns helpful error message" do
+      assert {:error, msg} = RelayManager.disconnect(:non_existent_relay)
+      assert msg =~ "relay name must be a string"
     end
   end
 
   describe "ready? checks" do
     test "ready? returns error for non-existent relay name" do
-      assert {:error, _msg} = RelayManager.ready?("non_existent_relay")
-      assert {:error, :not_found} = RelayManager.ready?(:non_existent_relay)
+      assert {:error, :not_found} = RelayManager.ready?("non_existent_relay")
+    end
+
+    test "ready? with atom returns helpful error message" do
+      assert {:error, msg} = RelayManager.ready?(:non_existent_relay)
+      assert msg =~ "relay name must be a string"
     end
   end
 

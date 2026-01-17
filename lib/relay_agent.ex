@@ -10,17 +10,17 @@ defmodule NostrEx.RelayAgent do
     Agent.start_link(fn -> initial_value end, name: __MODULE__)
   end
 
-  @spec state() :: %{atom() => [String.t()]}
+  @spec state() :: %{String.t() => [String.t()]}
   def state do
     Agent.get(__MODULE__, & &1)
   end
 
-  @spec get(atom()) :: [String.t()] | nil
+  @spec get(String.t()) :: [String.t()] | nil
   def get(relay_name) do
     Agent.get(__MODULE__, &Map.get(&1, relay_name))
   end
 
-  @spec get_relays_for_sub(String.t()) :: [atom()]
+  @spec get_relays_for_sub(String.t()) :: [String.t()]
   def get_relays_for_sub(sub_id) do
     Agent.get(__MODULE__, fn state ->
       state
@@ -29,7 +29,7 @@ defmodule NostrEx.RelayAgent do
     end)
   end
 
-  @spec get_relays_by_sub() :: %{String.t() => [atom()]}
+  @spec get_relays_by_sub() :: %{String.t() => [String.t()]}
   def get_relays_by_sub do
     state()
     |> Enum.reduce(%{}, fn {relay_name, subs}, acc ->
@@ -44,7 +44,7 @@ defmodule NostrEx.RelayAgent do
     Agent.get(__MODULE__, fn state -> state |> Map.values() |> List.flatten() |> Enum.uniq() end)
   end
 
-  @spec update(atom(), String.t()) :: :ok
+  @spec update(String.t(), String.t()) :: :ok
   def update(relay_name, sub_id) do
     Agent.update(__MODULE__, fn state ->
       Map.update(state, relay_name, [sub_id], fn existing ->
@@ -57,7 +57,7 @@ defmodule NostrEx.RelayAgent do
     end)
   end
 
-  @spec delete_subscription(atom(), String.t()) :: :ok
+  @spec delete_subscription(String.t(), String.t()) :: :ok
   def delete_subscription(relay_name, sub_id) do
     Agent.update(
       __MODULE__,
@@ -65,7 +65,7 @@ defmodule NostrEx.RelayAgent do
     )
   end
 
-  @spec delete_relay(atom()) :: :ok
+  @spec delete_relay(String.t()) :: :ok
   def delete_relay(relay_name) do
     Agent.update(__MODULE__, &Map.delete(&1, relay_name))
   end

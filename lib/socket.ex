@@ -47,7 +47,7 @@ defmodule NostrEx.Socket do
 
   ## Public API
 
-  @spec start_link(%{uri: URI.t(), name: atom()}) :: GenServer.on_start()
+  @spec start_link(%{uri: URI.t(), name: String.t()}) :: GenServer.on_start()
   def start_link(%{uri: uri, name: name}) do
     GenServer.start_link(__MODULE__, {uri, name}, name: via_tuple(name))
   end
@@ -81,8 +81,8 @@ defmodule NostrEx.Socket do
   @doc """
   Send a serialized message to the relay via the connection at this relay name or `pid`.
   """
-  @spec send_message(pid() | atom(), binary()) :: :ok | {:error, atom() | String.t()}
-  def send_message(relay_name, text) when is_atom(relay_name) and is_binary(text) do
+  @spec send_message(pid() | String.t(), binary()) :: :ok | {:error, atom() | String.t()}
+  def send_message(relay_name, text) when is_binary(relay_name) and is_binary(text) do
     via_tuple(relay_name) |> GenServer.call({:send_text, text}, @default_call_timeout)
   end
 
@@ -92,7 +92,7 @@ defmodule NostrEx.Socket do
 
   def send_message(relay_name, _text) do
     {:error,
-     "invalid relay_name format, expected a registered atom or a pid, got: #{inspect(relay_name)}"}
+     "invalid relay_name format, expected a registered string or a pid, got: #{inspect(relay_name)}"}
   end
 
   @doc """
@@ -101,7 +101,7 @@ defmodule NostrEx.Socket do
   """
   @spec get_status(pid()) :: %{
           url: String.t(),
-          name: atom(),
+          name: String.t(),
           ready?: boolean(),
           closing?: boolean()
         }
@@ -112,7 +112,7 @@ defmodule NostrEx.Socket do
   ## GenServer Callbacks
 
   @impl GenServer
-  @spec init({URI.t(), atom()}) :: {:ok, %__MODULE__{}}
+  @spec init({URI.t(), String.t()}) :: {:ok, %__MODULE__{}}
   def init({uri, name}) do
     Process.flag(:trap_exit, true)
     {:ok, %__MODULE__{uri: uri, name: name}}
@@ -152,7 +152,7 @@ defmodule NostrEx.Socket do
 
   @impl GenServer
   @spec handle_call(:status, GenServer.from(), %__MODULE__{}) ::
-          {:reply, %{url: String.t(), name: atom(), ready?: boolean(), closing?: boolean()},
+          {:reply, %{url: String.t(), name: String.t(), ready?: boolean(), closing?: boolean()},
            %__MODULE__{}}
   def handle_call(:status, _from, state) do
     status_data = build_status(state)
@@ -224,7 +224,7 @@ defmodule NostrEx.Socket do
 
   ## Private Functions
 
-  @spec via_tuple(atom()) :: {:via, Registry, {module(), atom()}}
+  @spec via_tuple(String.t()) :: {:via, Registry, {module(), String.t()}}
   defp via_tuple(name), do: {:via, Registry, {RelayRegistry, name}}
 
   @spec establish_connection(URI.t()) :: {:ok, Mint.HTTP.t(), reference()} | {:error, String.t()}
@@ -269,7 +269,7 @@ defmodule NostrEx.Socket do
 
   @spec build_status(%__MODULE__{}) :: %{
           url: String.t(),
-          name: atom(),
+          name: String.t(),
           ready?: boolean(),
           closing?: boolean()
         }

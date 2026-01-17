@@ -83,8 +83,8 @@ defmodule NostrEx.RelayManager do
     end
   end
 
-  @spec ready?(atom()) :: boolean() | {:error, :not_found | String.t()}
-  def ready?(relay_name) when is_atom(relay_name) do
+  @spec ready?(String.t()) :: boolean() | {:error, :not_found | String.t()}
+  def ready?(relay_name) when is_binary(relay_name) do
     case lookup(relay_name) do
       {:ok, pid} -> Socket.get_status(pid) |> Map.get(:ready?)
       err -> err
@@ -92,10 +92,10 @@ defmodule NostrEx.RelayManager do
   end
 
   def ready?(_),
-    do: {:error, "relay name must be an atom, see registered_names/0 for currently active relay names."}
+    do: {:error, "relay name must be a string, see registered_names/0 for currently active relay names."}
 
-  @spec disconnect(atom()) :: :ok | {:error, term() | String.t()}
-  def disconnect(relay_name) when is_atom(relay_name) do
+  @spec disconnect(String.t()) :: :ok | {:error, term() | String.t()}
+  def disconnect(relay_name) when is_binary(relay_name) do
     case lookup(relay_name) do
       {:ok, pid} -> DynamicSupervisor.terminate_child(__MODULE__, pid)
       err -> err
@@ -103,7 +103,7 @@ defmodule NostrEx.RelayManager do
   end
 
   def disconnect(_),
-    do: {:error, "relay name must be an atom, see registered_names/0 for currently active relay names."}
+    do: {:error, "relay name must be a string, see registered_names/0 for currently active relay names."}
 
   @spec relays() :: [{:undefined, pid(), :worker, [module()]}]
   def relays(), do: DynamicSupervisor.which_children(__MODULE__)
@@ -115,17 +115,17 @@ defmodule NostrEx.RelayManager do
     |> Enum.map(&get_pid/1)
   end
 
-  @spec get_states() :: [%{url: String.t(), name: atom(), ready?: boolean(), closing?: boolean()}]
+  @spec get_states() :: [%{url: String.t(), name: String.t(), ready?: boolean(), closing?: boolean()}]
   def get_states() do
     active_pids() |> Enum.map(fn pid -> Socket.get_status(pid) end)
   end
 
-  @spec registered_names() :: [atom()]
+  @spec registered_names() :: [String.t()]
   def registered_names() do
     Registry.select(RelayRegistry, [{{:"$1", :_, :_}, [], [:"$1"]}]) |> Enum.sort()
   end
 
-  @spec lookup(atom()) :: {:ok, pid()} | {:error, :not_found}
+  @spec lookup(String.t()) :: {:ok, pid()} | {:error, :not_found}
   def lookup(name) do
     case Registry.lookup(RelayRegistry, name) do
       [{pid, _}] -> {:ok, pid}

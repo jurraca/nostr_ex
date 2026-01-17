@@ -45,8 +45,8 @@ defmodule NostrEx.ClientTest do
       assert {:error, :not_found} = Client.close_conn("non_existent_relay")
     end
 
-    test "returns error for non-existent relay atom" do
-      assert {:error, :not_found} = Client.close_conn(:nonexistent_relay)
+    test "returns error for non-existent relay name" do
+      assert {:error, :not_found} = Client.close_conn("nonexistent_relay")
     end
 
     test "returns error for invalid type" do
@@ -88,7 +88,7 @@ defmodule NostrEx.ClientTest do
 
       # Invalid relay list should return error
       assert {:error, [{:no_relays, _message}]} =
-               Client.send_event(signed_event, send_via: [:nonexistent_relay])
+               Client.send_event(signed_event, send_via: ["nonexistent_relay"])
     end
   end
 

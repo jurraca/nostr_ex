@@ -5,7 +5,7 @@ defmodule NostrEx do
   ## Quick Start
 
       # Connect to a relay
-      {:ok, :relay_damus_io} = NostrEx.connect("wss://relay.damus.io")
+      {:ok, "relay.damus.io"} = NostrEx.connect("wss://relay.damus.io")
 
       # Create and send a subscription
       {:ok, sub} = NostrEx.create_sub(authors: [pubkey], kinds: [1])
@@ -17,7 +17,7 @@ defmodule NostrEx do
       # Create, sign, and send an event
       {:ok, event} = NostrEx.create_event(1, content: "Hello Nostr!")
       {:ok, signed} = NostrEx.sign_event(event, private_key)
-      {:ok, event_id} = NostrEx.send_event(signed)
+      {:ok, event_id, []} = NostrEx.send_event(signed)
 
   ## Modules
 
@@ -29,7 +29,7 @@ defmodule NostrEx do
   alias NostrEx.{Client, RelayAgent, RelayManager, Subscription}
   alias Nostr.Event
 
-  @type relay_name :: atom()
+  @type relay_name :: String.t()
   @type sub_id :: String.t()
   @type event_id :: String.t()
 
@@ -41,7 +41,7 @@ defmodule NostrEx do
   ## Examples
 
       iex> NostrEx.connect("wss://relay.damus.io")
-      {:ok, :relay_damus_io}
+      {:ok, "relay.damus.io"}
 
       iex> NostrEx.connect("invalid")
       {:error, "Invalid URL"}
@@ -59,18 +59,22 @@ defmodule NostrEx do
       iex> NostrEx.disconnect("wss://relay.damus.io")
       :ok
 
-      iex> NostrEx.disconnect(:relay_damus_io)
+      iex> NostrEx.disconnect("relay.damus.io")
       :ok
   """
-  @spec disconnect(binary() | relay_name()) :: :ok | {:error, :not_found | String.t()}
-  def disconnect(relay_url) when is_binary(relay_url) do
-    case url_to_relay_name(relay_url) do
-      {:ok, relay_name} -> Client.close_conn(relay_name)
-      {:error, reason} -> {:error, reason}
+  @spec disconnect(relay_name()) :: :ok | {:error, :not_found | String.t()}
+  def disconnect(relay_name) when is_binary(relay_name) do
+    # Try as direct relay name first, then as URL
+    case Client.close_conn(relay_name) do
+      :ok -> :ok
+      {:error, :not_found} ->
+        case url_to_relay_name(relay_name) do
+          {:ok, name} -> Client.close_conn(name)
+          {:error, _} -> {:error, :not_found}
+        end
+      error -> error
     end
   end
-
-  def disconnect(relay_name) when is_atom(relay_name), do: Client.close_conn(relay_name)
 
   @doc """
   List all connected relays.
@@ -78,7 +82,7 @@ defmodule NostrEx do
   ## Examples
 
       iex> NostrEx.list_relays()
-      [:relay_damus_io, :relay_nostr_band]
+      ["relay.damus.io", "relay.nostr.band"]
   """
   @spec list_relays() :: [relay_name()]
   def list_relays, do: RelayManager.registered_names()

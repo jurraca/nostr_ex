@@ -20,7 +20,7 @@ The library follows a clean separation of concerns:
 
 ```elixir
 # Connect to a relay
-{:ok, :relay_damus_io} = NostrEx.connect("wss://relay.damus.io")
+{:ok, "relay.damus.io"} = NostrEx.connect("wss://relay.damus.io")
 
 # Create and send a subscription
 {:ok, sub} = NostrEx.create_sub(authors: [pubkey], kinds: [1])
@@ -30,7 +30,7 @@ The library follows a clean separation of concerns:
 # Create, sign, and send an event
 {:ok, event} = NostrEx.create_event(1, content: "Hello Nostr!")
 {:ok, signed} = NostrEx.sign_event(event, private_key)
-{:ok, event_id} = NostrEx.send_event(signed)
+{:ok, event_id, []} = NostrEx.send_event(signed)
 ```
 
 ### Public API (NostrEx module)
@@ -61,7 +61,7 @@ The library follows a clean separation of concerns:
 - `NostrEx.RelayManager` - Orchestrates connections to multiple Nostr relays
 - `NostrEx.RelayAgent` - Agent-based state management for relay data
 - `NostrEx.Socket` - WebSocket connection handling for relay communication
-- Relays are tracked by name as atoms via a `RelayRegistry`, abstracting away PID management
+- Relays are tracked by name as strings (hostnames) via a `RelayRegistry`, abstracting away PID management
 
 **Client Interface**
 - `NostrEx` - Main public API module (user-facing)
@@ -78,9 +78,11 @@ The library follows a clean separation of concerns:
 ### Design Patterns
 
 - **OTP Supervision**: Application follows OTP patterns with `NostrEx.Application` as the entry point
-- **Process Registry**: Relays are registered by atom names for easy lookup without PID tracking
+- **Process Registry**: Relays are registered by string names (hostnames) for easy lookup without PID tracking
 - **Functional API**: Public-facing functions return tuples like `{:ok, result}` or `{:error, reason}`
+- **Tagged Results**: Operations across multiple relays return `{:ok, value, failures}` for partial success
 - **Struct-based API**: Subscriptions use `%NostrEx.Subscription{}` for type safety
+- **Silent by Default**: Library logs only via return values, not Logger calls
 
 ### Cryptography
 

@@ -28,8 +28,8 @@ defmodule NostrEx.Client do
   - `:send_via` - List of relays to send the event to. Defaults to all connected relays.
   """
   @type send_result ::
-          {:ok, event_id :: binary(), failures :: [{atom(), term()}]}
-          | {:error, failures :: [{atom(), term()}]}
+          {:ok, event_id :: binary(), failures :: [{String.t(), term()}]}
+          | {:error, failures :: [{String.t() | atom(), term()}]}
 
   @spec send_event(Event.t(), keyword()) :: send_result()
   def send_event(event, opts \\ [])
@@ -112,8 +112,8 @@ defmodule NostrEx.Client do
   end
 
   @type close_result ::
-          {:ok, closed :: [atom()], failures :: [{atom(), term()}]}
-          | {:error, failures :: [{atom(), term()}]}
+          {:ok, closed :: [String.t()], failures :: [{String.t(), term()}]}
+          | {:error, failures :: [{String.t() | atom(), term()}]}
 
   @doc """
   Close a subscription by ID.
@@ -158,8 +158,8 @@ defmodule NostrEx.Client do
   @doc """
   Close a connection to a relay by name or pid.
   """
-  @spec close_conn(atom()) :: :ok | {:error, :not_found}
-  def close_conn(relay_name) when is_atom(relay_name) do
+  @spec close_conn(String.t()) :: :ok | {:error, :not_found}
+  def close_conn(relay_name) when is_binary(relay_name) do
     case Registry.lookup(NostrEx.RelayRegistry, relay_name) do
       [{pid, _}] -> close_conn(pid)
       _ -> {:error, :not_found}
@@ -230,7 +230,7 @@ defmodule NostrEx.Client do
     |> Message.serialize()
   end
 
-  @spec get_relays(nil | :all | [atom() | pid() | String.t()]) :: [atom() | pid() | {:error, String.t()}]
+  @spec get_relays(nil | :all | [String.t()]) :: [String.t()]
   defp get_relays(nil), do: get_relays(:all)
   defp get_relays(:all), do: RelayManager.registered_names()
 
@@ -238,32 +238,34 @@ defmodule NostrEx.Client do
     {oks, _errors} =
       relay_list
       |> Enum.map(&normalize(&1))
-      |> Enum.split_with(&is_atom(&1))
+      |> Enum.split_with(&is_binary(&1))
 
     oks
   end
 
   defp get_relays(_relay_list), do: []
 
-  defp normalize(relay) do
-    cond do
-      relay in RelayManager.registered_names() ->
-        relay
+  defp normalize(relay) when is_binary(relay) do
+    # Try as-is first (already a registered name)
+    if relay in RelayManager.registered_names() do
+      relay
+    else
+      # Try parsing as URL and extracting host
+      host = relay |> URI.parse() |> Map.get(:host)
 
-      is_binary(relay) ->
-        host = relay |> URI.parse() |> Map.get(:host)
+      if host do
+        name = Utils.name_from_host(host)
 
-        with true <- !is_nil(host),
-             atom_name = Utils.name_from_host(host),
-             true <- atom_name in RelayManager.registered_names() do
-          atom_name
+        if name in RelayManager.registered_names() do
+          name
         else
-          _ ->
-            "relay not connected or invalid, got #{relay}"
+          {:error, "relay not connected or invalid, got #{relay}"}
         end
-
-      true ->
-        "invalid relay name, got #{relay}"
+      else
+        {:error, "relay not connected or invalid, got #{relay}"}
+      end
     end
   end
+
+  defp normalize(relay), do: {:error, "invalid relay name, got #{inspect(relay)}"}
 end
