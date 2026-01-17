@@ -1,20 +1,5 @@
 defmodule NostrEx.Utils do
   @doc """
-  Aggregates a list of :ok / :error tuples into a single tuple.
-  """
-  def collect(results) do
-    {oks, errors} = Enum.split_with(results, &(match?({:ok, _}, &1) || match?(:ok, &1)))
-
-    case errors do
-      [] -> {:ok, Enum.map(oks, fn
-        {:ok, v} -> v
-        :ok -> :ok
-      end)}
-      errors -> {:error, errors |> Enum.reject(&is_nil/1) |> Enum.map(fn {:error, e} -> e end)}
-    end
-  end
-
-  @doc """
   Takes a host name, returns an atom representation for use as human-readable reference, e.g. "relay_mysite_com".
   """
   def name_from_host(host) when is_binary(host) do

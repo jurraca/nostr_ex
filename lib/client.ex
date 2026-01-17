@@ -111,30 +111,47 @@ defmodule NostrEx.Client do
     end
   end
 
+  @type close_result ::
+          {:ok, closed :: [atom()], failures :: [{atom(), term()}]}
+          | {:error, failures :: [{atom(), term()}]}
+
   @doc """
   Close a subscription by ID.
 
   Sends CLOSE message to all relays that know about this subscription.
-  """
-  @spec close_sub(String.t()) :: {:ok, [any()]} | {:error, String.t() | [any()]}
-  def close_sub(sub_id) when is_binary(sub_id) do
-    with true <- sub_id in RelayAgent.get_unique_subscriptions(),
-         relays <- RelayAgent.get_relays_for_sub(sub_id),
-         request = Message.close(sub_id) |> Message.serialize() do
-      relays
-      |> Enum.map(fn relay_name ->
-        case send_to_relay(relay_name, request) do
-          {:ok, _} -> RelayAgent.delete_subscription(relay_name, sub_id)
-          err -> err
-        end
-      end)
-      |> NostrEx.Utils.collect()
-    else
-      false ->
-        {:error, "subscription ID not found: #{sub_id}"}
 
-      _ ->
-        {:error, "could not get relays for sub_id: #{sub_id}"}
+  Returns `{:ok, closed_relays, failures}` where failures is a list of
+  `{relay_name, reason}` tuples, or `{:error, failures}` if all failed.
+  """
+  @spec close_sub(String.t()) :: close_result()
+  def close_sub(sub_id) when is_binary(sub_id) do
+    if sub_id not in RelayAgent.get_unique_subscriptions() do
+      {:error, [{:not_found, "subscription ID not found: #{sub_id}"}]}
+    else
+      relays = RelayAgent.get_relays_for_sub(sub_id)
+      request = Message.close(sub_id) |> Message.serialize()
+
+      results =
+        Enum.map(relays, fn relay_name ->
+          case send_to_relay(relay_name, request) do
+            :ok ->
+              RelayAgent.delete_subscription(relay_name, sub_id)
+              {:ok, relay_name}
+
+            {:error, reason} ->
+              {:error, relay_name, reason}
+          end
+        end)
+
+      {successes, failures} = Enum.split_with(results, &match?({:ok, _}, &1))
+
+      closed_relays = Enum.map(successes, fn {:ok, relay} -> relay end)
+      failure_tuples = Enum.map(failures, fn {:error, relay, reason} -> {relay, reason} end)
+
+      case successes do
+        [] -> {:error, failure_tuples}
+        _ -> {:ok, closed_relays, failure_tuples}
+      end
     end
   end
 
