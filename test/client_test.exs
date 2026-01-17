@@ -43,7 +43,7 @@ defmodule NostrEx.ClientTest do
     test "returns error for invalid event" do
       invalid_event = %{not: "an event"}
 
-      assert {:error, "invalid event provided, must be an %Event{} struct."} =
+      assert {:error, [{:invalid_event, "must be an %Event{} struct"}]} =
                Client.sign_and_send_event(invalid_event, @privkey, [])
     end
   end
