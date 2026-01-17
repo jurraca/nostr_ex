@@ -4,13 +4,20 @@ defmodule NostrEx.ClientTest do
 
   @privkey "5ee1c8000ab28edd64d74a7d951af749cfb0b7e1f31a4ad87940a55b0e7e6b3d"
 
-  describe "sign event" do
+  describe "sign_event/2" do
     test "succeeds with private key" do
       {:ok, event} = NostrEx.create_event(1, content: "test content")
       assert {:ok, signed_event} = NostrEx.sign_event(event, @privkey)
       assert signed_event.kind == event.kind
       assert signed_event.content == event.content
       assert String.length(signed_event.sig) == 128
+    end
+
+    test "returns error for invalid signer type" do
+      {:ok, event} = NostrEx.create_event(1, content: "test content")
+
+      assert {:error, message} = Client.sign_event(event, 12345)
+      assert message =~ "signer must be a binary private key"
     end
   end
 
@@ -34,8 +41,16 @@ defmodule NostrEx.ClientTest do
   end
 
   describe "close_conn/1" do
-    test "returns error for non-existent relay" do
+    test "returns error for non-existent relay string" do
       assert {:error, :not_found} = Client.close_conn("non_existent_relay")
+    end
+
+    test "returns error for non-existent relay atom" do
+      assert {:error, :not_found} = Client.close_conn(:nonexistent_relay)
+    end
+
+    test "returns error for invalid type" do
+      assert {:error, :not_found} = Client.close_conn(12345)
     end
   end
 
@@ -45,6 +60,15 @@ defmodule NostrEx.ClientTest do
 
       assert {:error, [{:invalid_event, "must be an %Event{} struct"}]} =
                Client.sign_and_send_event(invalid_event, @privkey, [])
+    end
+
+    test "returns error when signing fails with invalid signer" do
+      {:ok, event} = NostrEx.create_event(1, content: "test content")
+
+      assert {:error, [{:signing_failed, message}]} =
+               Client.sign_and_send_event(event, 12345, [])
+
+      assert message =~ "signer must be a binary private key"
     end
   end
 
@@ -74,6 +98,30 @@ defmodule NostrEx.ClientTest do
 
       assert {:error, [{:not_found, message}]} = Client.close_sub(fake_sub_id)
       assert message =~ "subscription ID not found"
+    end
+  end
+
+  describe "send_subscription/2" do
+    test "returns error with no relays connected" do
+      sub = %NostrEx.Subscription{
+        id: "test_sub_id",
+        filters: [%Nostr.Filter{}],
+        created_at: DateTime.utc_now()
+      }
+
+      assert {:error, "no relays connected"} = Client.send_subscription(sub)
+    end
+  end
+
+  describe "serialize/1" do
+    test "serializes a signed event to JSON" do
+      {:ok, event} = NostrEx.create_event(1, content: "test content")
+      {:ok, signed_event} = NostrEx.sign_event(event, @privkey)
+
+      result = Client.serialize(signed_event)
+
+      assert is_binary(result)
+      assert ["EVENT", %{"kind" => 1, "content" => "test content"}] = JSON.decode!(result)
     end
   end
 end
