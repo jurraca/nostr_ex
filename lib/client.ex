@@ -149,37 +149,6 @@ defmodule NostrEx.Client do
   def close_conn(pid) when is_pid(pid), do: DynamicSupervisor.terminate_child(RelayManager, pid)
   def close_conn(_), do: {:error, :not_found}
 
-  @spec create_filters(keyword() | [keyword()] | [map()]) :: {:ok, [Filter.t()]} | {:error, String.t()}
-  defp create_filters([]), do: {:error, "empty filters"}
-  defp create_filters(filters) when is_list(filters) do
-    cond do
-      Keyword.keyword?(filters) ->
-        {:ok, [Map.merge(%Filter{}, Map.new(filters))]}
-
-      Enum.all?(filters, &Keyword.keyword?/1) ->
-        {:ok, Enum.map(filters, &Map.merge(%Filter{}, Map.new(&1)))}
-
-      Enum.all?(filters, &is_map/1) ->
-        {:ok, Enum.map(filters, &Map.merge(%Filter{}, &1))}
-
-      true ->
-        {:error, "Invalid filter format"}
-    end
-  end
-  defp create_filters(_), do: {:error, "Invalid filter format"}
-
-  @spec create_subscription_message([Filter.t()]) :: {:ok, String.t(), binary()}
-  defp create_subscription_message(filters) when is_list(filters) do
-    sub_id = :crypto.strong_rand_bytes(32) |> Base.encode16(case: :lower)
-
-    msg =
-      filters
-      |> Message.request(sub_id)
-      |> Message.serialize()
-
-    {:ok, sub_id, msg}
-  end
-
   @spec subscribe_to_relay(atom(), String.t(), binary()) :: :ok | {:error, String.t()}
   defp subscribe_to_relay(relay_name, sub_id, payload) when is_binary(sub_id) do
     with :ok <- send_to_relay(relay_name, payload),
