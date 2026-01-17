@@ -47,4 +47,33 @@ defmodule NostrEx.ClientTest do
                Client.sign_and_send_event(invalid_event, @privkey, [])
     end
   end
+
+  describe "send_event/2" do
+    test "returns error with no relays connected" do
+      {:ok, event} = NostrEx.create_event(1, content: "test content")
+      {:ok, signed_event} = NostrEx.sign_event(event, @privkey)
+
+      # With no relays connected, should return error with failures list
+      assert {:error, [{:no_relays, message}]} = Client.send_event(signed_event)
+      assert message =~ "no valid relays found"
+    end
+
+    test "returns error when invalid relay list provided" do
+      {:ok, event} = NostrEx.create_event(1, content: "test content")
+      {:ok, signed_event} = NostrEx.sign_event(event, @privkey)
+
+      # Invalid relay list should return error
+      assert {:error, [{:no_relays, _message}]} =
+               Client.send_event(signed_event, send_via: [:nonexistent_relay])
+    end
+  end
+
+  describe "close_sub/1" do
+    test "returns error for non-existent subscription" do
+      fake_sub_id = "nonexistent_sub_id_12345"
+
+      assert {:error, [{:not_found, message}]} = Client.close_sub(fake_sub_id)
+      assert message =~ "subscription ID not found"
+    end
+  end
 end
