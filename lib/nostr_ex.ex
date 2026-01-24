@@ -153,7 +153,11 @@ defmodule NostrEx do
   @doc """
   Send a signed event to relays.
 
-  The event must be signed before sending.
+  The event must be signed before sending to prove the sender sent the message.
+
+  Returns `{:ok, event_id, errors}` or `{:error, errors}`, since the event may be sent
+  to multiple relays, and some sends may fail. `errors` is a list of errors in both returns.
+  If it is an empty list `[]`, all sends succeeded.
 
   ## Options
   - `:send_via` - List of relay names or URLs. Defaults to all connected relays.
@@ -163,12 +167,12 @@ defmodule NostrEx do
       iex> {:ok, event} = NostrEx.create_event(1, content: "gm")
       iex> {:ok, signed} = NostrEx.sign_event(event, privkey)
       iex> NostrEx.send_event(signed)
-      {:ok, "event_id_abc123..."}
+      {:ok, "event_id_abc123...", []}
 
       iex> NostrEx.send_event(signed, send_via: [:relay_damus_io])
       {:ok, "event_id_abc123..."}
   """
-  @spec send_event(Event.t(), keyword()) :: {:ok, event_id()} | {:error, String.t() | [String.t()]}
+  @spec send_event(Event.t(), keyword()) :: {:ok, event_id(), Keyword.t()} | {:error, Keyword.t()}
   def send_event(event, opts \\ [])
   def send_event(%Event{sig: nil}, _opts), do: {:error, "event must be signed before sending"}
   def send_event(%Event{} = event, opts), do: Client.send_event(event, opts)
