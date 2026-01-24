@@ -1,6 +1,6 @@
 # NostrEx
 
-An OTP-compliant Nostr client library for Elixir applications. It provides an interface for connecting to Nostr relays, managing subscriptions, sending and receiving Nostr events.
+A Nostr client for Elixir applications. Connect to Nostr relays, manage subscriptions, send and receiving Nostr events.
 
 ## Installation
 
@@ -9,14 +9,14 @@ Add `nostr_ex` to your list of dependencies in `mix.exs`:
 ```elixir
 def deps do
   [
-    {:nostr_ex, "~> 0.1.0"}
+    {:nostr_ex, "~> 0.2.0"}
   ]
 end
 ```
 
 **Required dependencies**:
 
-`nostr_ex` depends on `secp256k1`, bitcoin-core's C implementation of the secp256k1 curve, via Sgiath's [Elixir NIF](https://github.com/Sgiath/secp256k1) for this library. To compile the dependency successfully:
+`nostr_ex` depends on `secp256k1`, bitcoin-core's C implementation of the secp256k1 curve, via Sgiath's [Elixir NIF](https://github.com/Sgiath/secp256k1). To compile the dependency successfully:
 - on Linux, you'll need `autotools` installed
 - on MacOS, you may need `make`, `autoconf` and `autobuild`.
 - using Nix, all you need is `autoreconfHook` in your environment. It is included in the project devShell, see `nix/shell.nix`.
@@ -28,10 +28,10 @@ end
 ```elixir
 # Connect to a relay
 iex(1)> NostrEx.connect("wss://relay.example.com")
-{:ok, :relay_example_com}
+{:ok, "relay_example_com"}
 ```
 
-Relays are tracked by name as atoms via the `RelayRegistry`. All public facing functions expect this name as input, so you don't have to worry about PIDs. See `RelayManager.registered_names/0`.
+Relays are tracked by names via the `RelayRegistry`. All public facing functions expect this name as input, so you don't have to worry about PIDs. See `RelayManager.registered_names/0`.
 
 ### Sending Notes
 
@@ -41,14 +41,14 @@ iex(2)> privkey = :crypto.strong_rand_bytes(32) |> Base.encode16(case: :lower)
 "6dba065ffb6f51b4023d7d24a0c91c125c42ceff344d744d00f3c76e6cb5e03e"
 
 # Create an event with kind and attrs
-iex(4)> NostrEx.create_event(1, %{content: "hello mike"})
+iex(4)> NostrEx.create_event(1, %{content: "hello joe"})
 {:ok, %Nostr.Event{
   id: nil,
   pubkey: nil,
   kind: 1,
   tags: [],
   created_at: ~U[2025-08-03 15:29:15.261264Z],
-  content: "hello mike",
+  content: "hello joe",
   sig: nil
 }}
 
@@ -61,7 +61,7 @@ iex(3)> {:ok, signed} = NostrEx.sign_event(event, private_key)
    kind: 1,
    tags: [],
    created_at: ~U[2025-08-03 15:33:30.652067Z],
-   content: "hello mike",
+   content: "hello joe",
    sig: "60278f60548d5fa49841e0b7518201625aba9a9cf1cdc6d72621290b1943c21971d90c5ca3c2fba49b00ef84f488bac8bc0932c8ccc5ba5e3af2121ce7ad67c9"
  }}
 
