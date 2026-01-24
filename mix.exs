@@ -55,7 +55,7 @@ defmodule NostrEx.MixProject do
   # Run "mix help deps" to learn about dependencies.
   defp deps do
     [
-      {:nostr_lib, "~> 0.1.1"},
+      {:nostr_lib, "~> 0.2.0"},
       {:mint_web_socket, "~> 1.0.3"},
       {:req, "~> 0.5.0"},
       {:ex_doc, "~> 0.34", only: :dev, runtime: false, warn_if_outdated: true}
