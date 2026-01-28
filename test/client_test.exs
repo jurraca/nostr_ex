@@ -78,8 +78,8 @@ defmodule NostrEx.ClientTest do
       {:ok, signed_event} = NostrEx.sign_event(event, @privkey)
 
       # With no relays connected, should return error with failures list
-      assert {:error, [{:invalid_relays, message}]} = Client.send_event(signed_event)
-      assert message =~ "got:"
+      assert {:error, [{:no_relays, message}]} = Client.send_event(signed_event)
+      assert message =~ "no relays"
     end
 
     test "returns error when invalid relay list provided" do
@@ -87,8 +87,9 @@ defmodule NostrEx.ClientTest do
       {:ok, signed_event} = NostrEx.sign_event(event, @privkey)
 
       # Invalid relay list should return error
-      assert {:error, [{:invalid_relays, _message}]} =
+      assert {:error, [{:invalid_relays, message}]} =
                Client.send_event(signed_event, send_via: ["nonexistent_relay"])
+      assert message =~ "not connected"
     end
   end
 

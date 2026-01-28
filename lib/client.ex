@@ -37,9 +37,17 @@ defmodule NostrEx.Client do
     relay_names = get_relays(opts[:send_via])
 
     if relay_names == [] do
-      args = opts[:send_via]
-      err_msg = if(is_list(args), do: Enum.join(args, ", "), else: args)
-      {:error, [{:invalid_relays, "got: #{err_msg}"}]}
+      case opts[:send_via] do
+        nil ->
+          {:error, [{:no_relays, "no relays connected"}]}
+
+        relays ->
+          {:error,
+           [
+             {:invalid_relays,
+              "not connected to: #{inspect(relays)}. Connect with NostrEx.connect/1 first."}
+           ]}
+      end
     else
       payload = serialize(event)
 
