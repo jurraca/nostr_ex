@@ -66,13 +66,17 @@ defmodule NostrEx do
   def disconnect(relay_name) when is_binary(relay_name) do
     # Try as direct relay name first, then as URL
     case Client.close_conn(relay_name) do
-      :ok -> :ok
+      :ok ->
+        :ok
+
       {:error, :not_found} ->
         case url_to_relay_name(relay_name) do
           {:ok, name} -> Client.close_conn(name)
           {:error, _} -> {:error, :not_found}
         end
-      error -> error
+
+      error ->
+        error
     end
   end
 
@@ -147,7 +151,9 @@ defmodule NostrEx do
       "abc123..."
   """
   @spec sign_event(Event.t(), binary() | pid()) :: {:ok, Event.t()} | {:error, String.t()}
-  def sign_event(%Event{} = event, signer_or_privkey), do: Client.sign_event(event, signer_or_privkey)
+  def sign_event(%Event{} = event, signer_or_privkey),
+    do: Client.sign_event(event, signer_or_privkey)
+
   def sign_event(_event, _signer_or_privkey), do: {:error, "event must be an %Event{} struct"}
 
   @doc """
@@ -172,7 +178,8 @@ defmodule NostrEx do
       iex> NostrEx.send_event(signed, send_via: [:relay_damus_io])
       {:ok, "event_id_abc123..."}
   """
-  @spec send_event(Event.t(), keyword()) :: {:ok, event_id(), Keyword.t()} | {:error, Keyword.t()}
+  @spec send_event(Event.t(), keyword()) ::
+          {:ok, event_id(), Keyword.t()} | {:error, String.t() | atom(), Keyword.t()}
   def send_event(event, opts \\ [])
   def send_event(%Event{sig: nil}, _opts), do: {:error, "event must be signed before sending"}
   def send_event(%Event{} = event, opts), do: Client.send_event(event, opts)
@@ -210,12 +217,12 @@ defmodule NostrEx do
 
       iex> {:ok, sub} = NostrEx.create_sub(authors: [pubkey], kinds: [1])
       iex> NostrEx.send_sub(sub)
-      :ok
+      {:ok, "123zyx..."}
 
       iex> NostrEx.send_sub(sub, send_via: [:relay_damus_io])
-      :ok
+      {:ok, "123zyx..."}
   """
-  @spec send_sub(Subscription.t(), keyword()) :: :ok | {:error, String.t()}
+  @spec send_sub(Subscription.t(), keyword()) :: {:ok, String.t()} | {:error, String.t()}
   def send_sub(%Subscription{} = sub, opts \\ []), do: Client.send_sub(sub, opts)
 
   @doc """
@@ -226,12 +233,13 @@ defmodule NostrEx do
   ## Examples
 
       iex> NostrEx.close_sub(sub)
-      {:ok, [...]}
+      {:ok, [...], []}
 
       iex> NostrEx.close_sub("subscription_id_abc123")
-      {:ok, [...]}
+      {:ok, [...], []}
   """
-  @spec close_sub(Subscription.t() | sub_id()) :: {:ok, [any()]} | {:error, String.t()}
+  @spec close_sub(Subscription.t() | sub_id()) ::
+          {:ok, [String.t()], Keyword.t()} | {:error, String.t(), Keyword.t()}
   def close_sub(%Subscription{id: sub_id}), do: Client.close_sub(sub_id)
   def close_sub(sub_id) when is_binary(sub_id), do: Client.close_sub(sub_id)
 
@@ -292,9 +300,12 @@ defmodule NostrEx do
   @spec url_to_relay_name(binary()) :: {:ok, relay_name()} | {:error, String.t()}
   defp url_to_relay_name(relay_url) do
     case URI.parse(relay_url) do
-      %URI{host: nil} -> {:error, "Invalid URL: #{relay_url}"}
+      %URI{host: nil} ->
+        {:error, "Invalid URL: #{relay_url}"}
+
       %URI{host: host} ->
         relay_name = NostrEx.Utils.name_from_host(host)
+
         if relay_name in list_relays() do
           {:ok, relay_name}
         else

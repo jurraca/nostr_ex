@@ -18,6 +18,9 @@ defmodule NostrEx.Client do
   alias Nostr.{Event, Message}
   alias NostrEx.{RelayAgent, RelayManager, Socket, Utils}
 
+  @type send_result ::
+          {:ok, event_id :: binary(), Keyword.t()}
+          | {:error, String.t(), Keyword.t()}
 
   # === Event Publishing ===
 
@@ -27,10 +30,6 @@ defmodule NostrEx.Client do
   ## Options
   - `:send_via` - List of relays to send the event to. Defaults to all connected relays.
   """
-  @type send_result ::
-          {:ok, event_id :: binary(), failures :: [{String.t(), term()}]}
-          | {:error, failures :: [{String.t() | atom(), term()}]}
-
   @spec send_event(Event.t(), keyword()) :: send_result()
   def send_event(event, opts \\ [])
 
@@ -59,7 +58,7 @@ defmodule NostrEx.Client do
       failure_tuples = Enum.map(failures, fn {:error, relay, reason} -> {relay, reason} end)
 
       case successes do
-        [] -> {:error, failure_tuples}
+        [] -> {:error, "send failed", failure_tuples}
         _ -> {:ok, event.id, failure_tuples}
       end
     end
@@ -94,7 +93,7 @@ defmodule NostrEx.Client do
   ## Options
   - `:send_via` - List of relay names. Defaults to all connected relays.
   """
-  @spec send_sub(NostrEx.Subscription.t(), keyword()) :: :ok | {:error, String.t()}
+  @spec send_sub(NostrEx.Subscription.t(), keyword()) :: {:ok, String.t()} | {:error, String.t()}
   def send_sub(%NostrEx.Subscription{id: sub_id, filters: filters}, opts \\ []) do
     message = serialize_subscription(sub_id, filters)
     relay_names = get_relays(opts[:send_via])
@@ -114,16 +113,16 @@ defmodule NostrEx.Client do
   end
 
   @type close_result ::
-          {:ok, closed :: [String.t()], failures :: [{String.t(), term()}]}
-          | {:error, failures :: [{String.t() | atom(), term()}]}
+          {:ok, closed :: [String.t()], Keyword.t()}
+          | {:error, String.t(), Keyword.t()}
 
   @doc """
   Close a subscription by ID.
 
   Sends CLOSE message to all relays that know about this subscription.
 
-  Returns `{:ok, closed_relays, failures}` where failures is a list of
-  `{relay_name, reason}` tuples, or `{:error, failures}` if all failed.
+  Returns `{:ok, closed_relays, failures}` where failures is a keyword list of
+  `{relay_name, reason}` tuples, or `{:error, "close_failed", failures}` if all failed.
   """
   @spec close_sub(String.t()) :: close_result()
   def close_sub(sub_id) when is_binary(sub_id) do
@@ -151,7 +150,7 @@ defmodule NostrEx.Client do
       failure_tuples = Enum.map(failures, fn {:error, relay, reason} -> {relay, reason} end)
 
       case successes do
-        [] -> {:error, failure_tuples}
+        [] -> {:error, "close failed", failure_tuples}
         _ -> {:ok, closed_relays, failure_tuples}
       end
     end
@@ -194,7 +193,7 @@ defmodule NostrEx.Client do
         {:ok, signed_event}
 
       {:error, reason} ->
-            {:error, reason}
+        {:error, reason}
     end
   end
 
@@ -213,7 +212,9 @@ defmodule NostrEx.Client do
       {:ok, signed_event} ->
         serialized = serialize(signed_event)
         {:ok, signed_event.id, serialized}
-      err -> err
+
+      err ->
+        err
     end
   end
 
