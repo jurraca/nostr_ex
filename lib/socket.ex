@@ -233,7 +233,7 @@ defmodule NostrEx.Socket do
     ws_scheme = String.to_atom(uri.scheme)
 
     with {:ok, conn} <- Mint.HTTP.connect(http_scheme, uri.host, uri.port, protocols: [:http1]),
-      {:ok, conn, ref} <- Mint.WebSocket.upgrade(ws_scheme, conn, uri.path, []) do
+         {:ok, conn, ref} <- Mint.WebSocket.upgrade(ws_scheme, conn, uri.path, []) do
       {:ok, conn, ref}
     else
       {:error, %Mint.TransportError{} = error} ->
@@ -398,6 +398,7 @@ defmodule NostrEx.Socket do
       message: message,
       relay: state.uri.host
     })
+
     state
   end
 
@@ -457,7 +458,9 @@ defmodule NostrEx.Socket do
       {:ok, _websocket, data} ->
         _ = Mint.WebSocket.stream_request_body(state.conn, state.request_ref, data)
         :ok
-      {:error, _reason} -> :ok
+
+      {:error, _reason} ->
+        :ok
     end
   end
 end
