@@ -1,7 +1,7 @@
 defmodule NostrEx.MixProject do
   use Mix.Project
 
-  @version "0.2.1"
+  @version "0.2.2"
   def project do
     [
       app: :nostr_ex,
@@ -16,7 +16,7 @@ defmodule NostrEx.MixProject do
   end
 
   defp description() do
-    "A Nostr client library written in Elixir. Uses `nostr_lib` and `mint` to connect to relays, send events, and subscribe to relays."
+    "A Nostr client library for Elixir. Uses `nostr_lib` and `mint` to connect to relays, send events, and subscribe to relays."
   end
 
   defp package do

@@ -34,7 +34,7 @@ defmodule NostrEx.RelayAgent do
     state()
     |> Enum.reduce(%{}, fn {relay_name, subs}, acc ->
       Enum.reduce(subs, acc, fn sub, inner_acc ->
-       Map.update(inner_acc, sub, [relay_name], &[relay_name | &1])
+        Map.update(inner_acc, sub, [relay_name], &[relay_name | &1])
       end)
     end)
   end

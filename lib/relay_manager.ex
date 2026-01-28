@@ -44,16 +44,19 @@ defmodule NostrEx.RelayManager do
   def connect(relay_url) do
     with {:ok, uri} <- parse_url(relay_url),
          relay_name = Utils.name_from_host(uri.host),
-         {:ok, pid} <- DynamicSupervisor.start_child(__MODULE__, {Socket, %{uri: uri, name: relay_name}}) do
-        case connect_to_relay(pid) do
-          {:ok, _pid} -> {:ok, relay_name}
-          {:error, reason} -> {:error, reason}
-        end
-      else
-        {:error, {:already_started, pid}} ->
-          name = Socket.get_status(pid) |> Map.get(:name)
-          {:ok, name}
+         {:ok, pid} <-
+           DynamicSupervisor.start_child(__MODULE__, {Socket, %{uri: uri, name: relay_name}}) do
+      case connect_to_relay(pid) do
+        {:ok, _pid} -> {:ok, relay_name}
         {:error, reason} -> {:error, reason}
+      end
+    else
+      {:error, {:already_started, pid}} ->
+        name = Socket.get_status(pid) |> Map.get(:name)
+        {:ok, name}
+
+      {:error, reason} ->
+        {:error, reason}
     end
   end
 
@@ -69,7 +72,8 @@ defmodule NostrEx.RelayManager do
     end
   end
 
-  @spec wait_for_ready(pid(), pos_integer(), timeout(), non_neg_integer()) :: {:ok, pid()} | {:error, String.t()}
+  @spec wait_for_ready(pid(), pos_integer(), timeout(), non_neg_integer()) ::
+          {:ok, pid()} | {:error, String.t()}
   defp wait_for_ready(pid, interval, timeout, elapsed_time \\ 0) do
     if elapsed_time >= timeout do
       {:error, "Relay is connected but not ready to receive messages after #{timeout}"}
@@ -92,7 +96,9 @@ defmodule NostrEx.RelayManager do
   end
 
   def ready?(_),
-    do: {:error, "relay name must be a string, see registered_names/0 for currently active relay names."}
+    do:
+      {:error,
+       "relay name must be a string, see registered_names/0 for currently active relay names."}
 
   @spec disconnect(String.t()) :: :ok | {:error, term() | String.t()}
   def disconnect(relay_name) when is_binary(relay_name) do
@@ -103,7 +109,9 @@ defmodule NostrEx.RelayManager do
   end
 
   def disconnect(_),
-    do: {:error, "relay name must be a string, see registered_names/0 for currently active relay names."}
+    do:
+      {:error,
+       "relay name must be a string, see registered_names/0 for currently active relay names."}
 
   @spec relays() :: [{:undefined, pid(), :worker, [module()]}]
   def relays(), do: DynamicSupervisor.which_children(__MODULE__)
@@ -115,7 +123,9 @@ defmodule NostrEx.RelayManager do
     |> Enum.map(&get_pid/1)
   end
 
-  @spec get_states() :: [%{url: String.t(), name: String.t(), ready?: boolean(), closing?: boolean()}]
+  @spec get_states() :: [
+          %{url: String.t(), name: String.t(), ready?: boolean(), closing?: boolean()}
+        ]
   def get_states() do
     active_pids() |> Enum.map(fn pid -> Socket.get_status(pid) end)
   end
