@@ -362,8 +362,6 @@ defmodule NostrEx.Socket do
     text
     |> Message.parse()
     |> handle_nostr_message(state)
-
-    state
   end
 
   defp handle_frame(frame, state) do
@@ -372,22 +370,26 @@ defmodule NostrEx.Socket do
   end
 
   @spec handle_nostr_message(tuple() | atom(), %__MODULE__{}) :: :ok
-  defp handle_nostr_message({:event, subscription_id, _} = event, _state) do
+  defp handle_nostr_message({:event, subscription_id, _} = event, state) do
     registry_dispatch(subscription_id, event)
+    state
   end
 
   defp handle_nostr_message({:notice, message}, state) do
     Logger.notice("NOTICE from #{state.uri.host}: #{message}")
+    state
   end
 
   defp handle_nostr_message({:eose, subscription_id}, state) do
     Logger.info("End of stored events for subscription #{subscription_id}")
     registry_dispatch(subscription_id, {:eose, subscription_id, state.uri.host})
+    state
   end
 
   defp handle_nostr_message({:close, sub_id}, state) do
     Logger.info("Subscription #{sub_id} closed by relay")
     RelayAgent.delete_subscription(state.name, sub_id)
+    state
   end
 
   defp handle_nostr_message({:ok, event_id, success, message}, state) do
@@ -401,14 +403,17 @@ defmodule NostrEx.Socket do
       message: message,
       relay: state.uri.host
     })
+    state
   end
 
   defp handle_nostr_message(:error, state) do
     Logger.error("Parse error for message from #{state.uri.host}")
+    state
   end
 
   defp handle_nostr_message(unknown, state) do
     Logger.warning("Unknown message from #{state.uri.host}: #{inspect(unknown)}")
+    state
   end
 
   @spec do_close(%__MODULE__{}) :: {:stop, :normal, %__MODULE__{}}
