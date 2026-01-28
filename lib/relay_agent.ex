@@ -33,8 +33,8 @@ defmodule NostrEx.RelayAgent do
   def get_relays_by_sub do
     state()
     |> Enum.reduce(%{}, fn {relay_name, subs}, acc ->
-      Enum.map(subs, fn sub ->
-        Map.update(acc, sub, [relay_name], fn existing -> [relay_name | existing] end)
+      Enum.reduce(subs, acc, fn sub, inner_acc ->
+       Map.update(inner_acc, sub, [relay_name], &[relay_name | &1])
       end)
     end)
   end
@@ -61,7 +61,7 @@ defmodule NostrEx.RelayAgent do
   def delete_subscription(relay_name, sub_id) do
     Agent.update(
       __MODULE__,
-      &Map.update!(&1, relay_name, fn existing -> List.delete(existing, sub_id) end)
+      &Map.update(&1, relay_name, nil, fn existing -> List.delete(existing, sub_id) end)
     )
   end
 
