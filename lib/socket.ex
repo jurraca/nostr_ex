@@ -163,12 +163,12 @@ defmodule NostrEx.Socket do
   @spec handle_info(term(), %__MODULE__{}) ::
           {:noreply, %__MODULE__{}} | {:stop, :normal, %__MODULE__{}}
   def handle_info({:EXIT, _pid, reason}, state) do
-    Logger.notice("Relay process exited: #{inspect(reason)}")
+    Logger.debug("Relay process exited: #{inspect(reason)}")
     {:stop, :normal, state}
   end
 
   def handle_info({:tcp_closed, _port}, state) do
-    Logger.info("Connection closed by remote #{state.uri.host}.")
+    Logger.debug("Connection closed by remote #{state.uri.host}.")
     new_state = %{state | closing?: true, ready?: false, websocket: nil}
     {:stop, :normal, new_state}
   end
@@ -365,7 +365,7 @@ defmodule NostrEx.Socket do
   end
 
   defp handle_frame(frame, state) do
-    Logger.info("Unexpected frame received: #{inspect(frame)}")
+    Logger.debug("Unexpected frame received: #{inspect(frame)}")
     state
   end
 
@@ -381,22 +381,17 @@ defmodule NostrEx.Socket do
   end
 
   defp handle_nostr_message({:eose, subscription_id}, state) do
-    Logger.info("End of stored events for subscription #{subscription_id}")
     registry_dispatch(subscription_id, {:eose, subscription_id, state.uri.host})
     state
   end
 
   defp handle_nostr_message({:close, sub_id}, state) do
-    Logger.info("Subscription #{sub_id} closed by relay")
+    registry_dispatch(sub_id, {:close, sub_id, state.uri.host})
     RelayAgent.delete_subscription(state.name, sub_id)
     state
   end
 
   defp handle_nostr_message({:ok, event_id, success, message}, state) do
-    status = if success, do: "accepted", else: "rejected"
-    reason = if success, do: message, else: "with reason: " <> message
-    Logger.info("Event #{event_id} from #{state.uri.host} #{status} #{reason}")
-
     registry_dispatch(:ok, %{
       event_id: event_id,
       success: success,
