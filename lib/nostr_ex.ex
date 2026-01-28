@@ -117,27 +117,22 @@ defmodule NostrEx do
       {:ok, %Nostr.Event{kind: 1, content: "Hello!", ...}}
   """
   @spec create_event(integer(), map() | keyword()) :: {:ok, Event.t()} | {:error, String.t()}
-  def create_event(kind, attrs) when is_integer(kind) do
-    case attrs do
-      %{} = map_attrs ->
-        event = Event.create(kind, Enum.into(map_attrs, []))
-        {:ok, event}
-
-      attrs when is_list(attrs) ->
-        if Keyword.keyword?(attrs) do
-          event = Event.create(kind, attrs)
-          {:ok, event}
-        else
-          {:error, "invalid attrs: must be a map or keyword list"}
-        end
-
-      _ ->
-        {:error, "invalid attrs: must be a map or keyword list"}
+  def create_event(kind, attrs) when is_integer(kind) and is_list(attrs) do
+    if Keyword.keyword?(attrs) do
+      event = Event.create(kind, attrs)
+      {:ok, event}
+    else
+      {:error, "invalid attrs: must be a map or keyword list"}
     end
   end
 
-  def create_event(kind, _attrs) do
-    {:error, "invalid kind: must be an integer, got: #{inspect(kind)}"}
+  def create_event(kind, attrs) when is_integer(kind) and is_map(attrs) do
+    list_attrs = Enum.into(attrs, [])
+    create_event(kind, list_attrs)
+  end
+
+  def create_event(_kind, _attrs) do
+    {:error, "invalid args: kind must be an integer, attrs must be a map or keyword list.}"}
   end
 
   @doc """
