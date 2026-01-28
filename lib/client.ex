@@ -105,7 +105,6 @@ defmodule NostrEx.Client do
   def send_sub(%NostrEx.Subscription{id: sub_id, filters: filters}, opts \\ []) do
     message = serialize_subscription(sub_id, filters)
     relay_names = get_relays(opts[:send_via])
-    {:ok, _pid} = Registry.register(NostrEx.PubSub, sub_id, nil)
 
     case relay_names do
       [] ->
@@ -116,6 +115,7 @@ defmodule NostrEx.Client do
           subscribe_to_relay(relay_name, sub_id, message)
         end)
 
+        {:ok, _pid} = Registry.register(NostrEx.PubSub, sub_id, nil)
         {:ok, sub_id}
     end
   end
