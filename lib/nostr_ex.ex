@@ -286,10 +286,20 @@ defmodule NostrEx do
   @doc """
   Close all active subscriptions.
   """
-  @spec close_all_subs() :: [{:ok, [any()]} | {:error, String.t()}]
+  @spec close_all_subs() :: {:ok, [String.t()], Keyword.t()} | {:error, String.t(), Keyword.t()}
   def close_all_subs do
-    list_subs()
-    |> Enum.map(&Client.close_sub/1)
+    results = Enum.map(list_subs(), &Client.close_sub/1)
+
+    {closed, failed} =
+      Enum.reduce(results, {[], []}, fn
+        {:ok, relays, failures}, {c, f} -> {c ++ relays, f ++ failures}
+        {:error, _reason, failures}, {c, f} -> {c, f ++ failures}
+      end)
+
+    case closed do
+      [] -> {:error, "close failed", failed}
+      _ -> {:ok, closed, failed}
+    end
   end
 
   @spec url_to_relay_name(binary()) :: {:ok, relay_name()} | {:error, String.t()}
