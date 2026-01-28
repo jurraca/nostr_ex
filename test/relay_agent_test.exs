@@ -68,4 +68,14 @@ defmodule NostrEx.RelayAgentTest do
     assert relay1 in relays
     assert relay2 in relays
   end
+
+  test "inverts the relay->subs mapping to sub->relays" do
+    # Setup: two relays with overlapping subscriptions
+    RelayAgent.update("relay.damus.io", "sub_1")
+    RelayAgent.update("relay.damus.io", "sub_2")
+    RelayAgent.update("relay.nostr.band", "sub_1")  # sub_1 on both relays
+    result = RelayAgent.get_relays_by_sub()
+    assert result["sub_1"] |> Enum.sort() == ["relay.damus.io", "relay.nostr.band"]
+    assert result["sub_2"] == ["relay.damus.io"]
+  end
 end
