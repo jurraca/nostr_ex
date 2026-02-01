@@ -41,7 +41,7 @@ iex(2)> privkey = :crypto.strong_rand_bytes(32) |> Base.encode16(case: :lower)
 "6dba065ffb6f51b4023d7d24a0c91c125c42ceff344d744d00f3c76e6cb5e03e"
 
 # Create an event with kind and attrs
-iex(4)> NostrEx.create_event(1, %{content: "hello joe"})
+iex(4)> NostrEx.create_event(1, content: "hello joe")
 {:ok, %Nostr.Event{
   id: nil,
   pubkey: nil,
@@ -65,13 +65,16 @@ iex(3)> {:ok, signed} = NostrEx.sign_event(event, private_key)
    sig: "60278f60548d5fa49841e0b7518201625aba9a9cf1cdc6d72621290b1943c21971d90c5ca3c2fba49b00ef84f488bac8bc0932c8ccc5ba5e3af2121ce7ad67c9"
  }}
 
- # send it, returns the event ID
+# send it, returns the event ID
+# and an error list
  iex(4)> NostrEx.send_event(signed)
- {:ok, "871a08bf8e1b6d286d92238ce44648a94f7397042dd01a4ecc6db0afed745ec3"}
+ {:ok, "871a08bf8e1b6d286d92238ce44648a94f7397042dd01a4ecc6db0afed745ec3", []}
 ```
 
 The `send`-type functions take a `send_via` option in `opts` to specify which relays to send the event to.
 If not specified, all currently connected relays will be used.
+
+Additionally, since most send operations usually happen towards multiple relays, the response is a tuple of the form `{:ok, value, error_list}` to send back partial failures where at least one send succeeded but others may not have.
 
 ### Subscriptions
 
@@ -85,14 +88,12 @@ and similarly unsubscribe the current process with `Registry.unregister(NostrEx.
 ```elixir
 # Create a subscription
 now = DateTime.utc_now() |> DateTime.to_unix()
-NostrEx.create_sub([kinds: [1], since: now])
+NostrEx.create_sub(kinds: [1], since: now)
+> {:ok, %NostrEx.Subscription{...}}
 
 # Send a subscription with filters
-NostrEx.send_sub([
-  authors: [pubkey],
-  kinds: [30023],
-  since: 1753135689
-])
+NostrEx.send_sub(sub)
+> {:ok, "abc123f891..."}
 ```
 
 ### NIP-05 Verification

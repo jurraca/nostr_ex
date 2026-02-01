@@ -3,16 +3,7 @@ defmodule NostrEx.Client do
   Internal client operations for the Nostr protocol.
 
   This module provides the low-level implementation for NostrEx.
-  **Most users should use the `NostrEx` module instead.**
-
-  ## Public API (via NostrEx)
-
-  - `NostrEx.create_event/2` - Create events
-  - `NostrEx.sign_event/2` - Sign events  
-  - `NostrEx.send_event/2` - Send signed events
-  - `NostrEx.create_sub/1` - Create subscriptions
-  - `NostrEx.send_sub/2` - Send subscriptions
-  - `NostrEx.close_sub/1` - Close subscriptions
+  Most users should use the `NostrEx` module instead.
   """
 
   alias Nostr.{Event, Message}

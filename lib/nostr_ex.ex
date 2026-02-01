@@ -24,6 +24,15 @@ defmodule NostrEx do
   - `NostrEx.Subscription` - Subscription struct and creation
   - `NostrEx.Client` - Internal client operations
   - `NostrEx.RelayManager` - Relay connection management
+
+  ## Public API
+
+  - `NostrEx.create_event/2` - Create events
+  - `NostrEx.sign_event/2` - Sign events
+  - `NostrEx.send_event/2` - Send signed events
+  - `NostrEx.create_sub/1` - Create subscriptions
+  - `NostrEx.send_sub/2` - Send subscriptions
+  - `NostrEx.close_sub/1` - Close subscriptions
   """
 
   alias NostrEx.{Client, RelayAgent, RelayManager, Subscription}
@@ -156,7 +165,7 @@ defmodule NostrEx do
 
   The event must be signed before sending to prove the sender sent the message.
 
-  Returns `{:ok, event_id, errors}` or `{:error, errors}`, since the event may be sent
+  Returns `{:ok, event_id, errors}` or `{:error, reason, errors}`, since the event may be sent
   to multiple relays, and some sends may fail. `errors` is a list of errors in both returns.
   If it is an empty list `[]`, all sends succeeded.
 
@@ -170,7 +179,7 @@ defmodule NostrEx do
       iex> NostrEx.send_event(signed)
       {:ok, "event_id_abc123...", []}
 
-      iex> NostrEx.send_event(signed, send_via: [:relay_damus_io])
+      iex> NostrEx.send_event(signed, send_via: ["relay_damus_io"])
       {:ok, "event_id_abc123..."}
   """
   @spec send_event(Event.t(), keyword()) ::
