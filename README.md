@@ -9,7 +9,7 @@ Add `nostr_ex` to your list of dependencies in `mix.exs`:
 ```elixir
 def deps do
   [
-    {:nostr_ex, "~> 0.2.0"}
+    {:nostr_ex, "~> 0.2.2"}
   ]
 end
 ```
