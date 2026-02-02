@@ -1,6 +1,6 @@
 defmodule NostrEx.RelayManager do
   @moduledoc """
-  A Dynamic Supervisor which supervises connections to relays.
+  A `DynamicSupervisor` which supervises connections to relays.
 
   Nostr clients typically connect to multiple relays.
   When you `connect/1` to a relay, a child of this Supervisor is started, implemented by `NostrEx.Socket`.

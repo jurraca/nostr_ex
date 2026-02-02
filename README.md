@@ -33,6 +33,40 @@ iex(1)> NostrEx.connect("wss://relay.example.com")
 
 Relays are tracked by names via the `RelayRegistry`. All public facing functions expect this name as input, so you don't have to worry about PIDs. See `RelayManager.registered_names/0`.
 
+### Receiving Events
+
+Pass event filters to `create_sub/1`:
+
+```elixir
+# Receive only new events
+now = DateTime.utc_now() |> DateTime.to_unix()
+NostrEx.create_sub(kinds: [1], since: now)
+> {:ok, %NostrEx.Subscription{...}}
+
+# Send the subscription
+NostrEx.send_sub(sub)
+> {:ok, "abc123f891..."}
+```
+
+NostrEx receives events at the process that created the subscription.
+A simple event handler to print kind 1 notes might look like:
+```
+receive do
+  {:event, sub_id, %{kind: 1} = event} ->
+    IO.puts(event.content)
+  {:eose, sub_id} ->
+    IO.puts("No more events for sub " <> sub_id)
+  _ ->
+    IO.puts(:stderr, "Unexpected message received")
+end
+```
+The Nostr events are received via PubSub, and it's up to you to implement how to handle those received events.
+
+To subscribe to the given `sub_id` on a different process, call
+`NostrEx.listen(sub_id)` from the process, a shorthand for
+`Registry.register(NostrEx.PubSub, sub_id, nil)`.
+Similarly, unsubscribe the current process with `Registry.unregister(NostrEx.PubSub, sub_id)`.
+
 ### Sending Notes
 
 ```elixir
@@ -75,26 +109,6 @@ The `send`-type functions take a `send_via` option in `opts` to specify which re
 If not specified, all currently connected relays will be used.
 
 Additionally, since most send operations usually happen towards multiple relays, the response is a tuple of the form `{:ok, value, error_list}` to send back partial failures where at least one send succeeded but others may not have.
-
-### Subscriptions
-
-NostrEx forwards messages received via a Nostr subscription to the process that created the subscription.
-It's up to you to implement how to handle those received events.
-
-You can subscribe to any subscription ID by calling
-`Registry.register(NostrEx.PubSub, sub_id, nil)` from the process you want to be subscribed,
-and similarly unsubscribe the current process with `Registry.unregister(NostrEx.PubSub, sub_id)`.
-
-```elixir
-# Create a subscription
-now = DateTime.utc_now() |> DateTime.to_unix()
-NostrEx.create_sub(kinds: [1], since: now)
-> {:ok, %NostrEx.Subscription{...}}
-
-# Send a subscription with filters
-NostrEx.send_sub(sub)
-> {:ok, "abc123f891..."}
-```
 
 ### NIP-05 Verification
 

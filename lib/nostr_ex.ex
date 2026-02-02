@@ -5,14 +5,14 @@ defmodule NostrEx do
   ## Quick Start
 
       # Connect to a relay
-      {:ok, "relay.damus.io"} = NostrEx.connect("wss://relay.damus.io")
+      {:ok, "relay_damus_io"} = NostrEx.connect("wss://relay.damus.io")
 
-      # Create and send a subscription
+      # Create sub
       {:ok, sub} = NostrEx.create_sub(authors: [pubkey], kinds: [1])
-      :ok = NostrEx.send_sub(sub)
-
-      # Listen for events
+      # Listen for events from that sub
       NostrEx.listen(sub)
+      # Send sub
+      :ok = NostrEx.send_sub(sub)
 
       # Create, sign, and send an event
       {:ok, event} = NostrEx.create_event(1, content: "Hello Nostr!")
@@ -68,7 +68,7 @@ defmodule NostrEx do
       iex> NostrEx.disconnect("wss://relay.damus.io")
       :ok
 
-      iex> NostrEx.disconnect("relay.damus.io")
+      iex> NostrEx.disconnect("relay_damus_io")
       :ok
   """
   @spec disconnect(relay_name()) :: :ok | {:error, :not_found | String.t()}
@@ -120,9 +120,6 @@ defmodule NostrEx do
   ## Examples
 
       iex> NostrEx.create_event(1, content: "Hello!")
-      {:ok, %Nostr.Event{kind: 1, content: "Hello!", ...}}
-
-      iex> NostrEx.create_event(1, %{content: "Hello!"})
       {:ok, %Nostr.Event{kind: 1, content: "Hello!", ...}}
   """
   @spec create_event(integer(), map() | keyword()) :: {:ok, Event.t()} | {:error, String.t()}
@@ -223,7 +220,7 @@ defmodule NostrEx do
       iex> NostrEx.send_sub(sub)
       {:ok, "123zyx..."}
 
-      iex> NostrEx.send_sub(sub, send_via: [:relay_damus_io])
+      iex> NostrEx.send_sub(sub, send_via: ["relay_damus_io"])
       {:ok, "123zyx..."}
   """
   @spec send_sub(Subscription.t(), keyword()) :: {:ok, String.t()} | {:error, String.t()}
@@ -236,11 +233,12 @@ defmodule NostrEx do
 
   ## Examples
 
-      iex> NostrEx.close_sub(sub)
-      {:ok, [...], []}
+      iex> NostrEx.close_sub("sub123")
+      {:ok, ["relay_test_com", "relay_two_net], []}
 
-      iex> NostrEx.close_sub("subscription_id_abc123")
-      {:ok, [...], []}
+      # Returns :ok for partial failures, with error messages
+      iex> NostrEx.close_sub("sub456")
+      {:ok, ["relay_test_com"], [{"relay_two_net", "close failed"]}
   """
   @spec close_sub(Subscription.t() | sub_id()) ::
           {:ok, [String.t()], Keyword.t()} | {:error, String.t(), Keyword.t()}

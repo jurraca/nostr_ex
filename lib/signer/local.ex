@@ -2,7 +2,7 @@ defmodule NostrEx.Signer.Local do
   @moduledoc """
   Local signer that mimics the NIP-46 interface but keeps private keys in memory.
 
-  This is the simplest and most secure option for single-user applications
+  This is the simplest option for single-user applications
   where you want to keep your private key local to your application while
   maintaining compatibility with the NIP-46 interface.
   """
