@@ -72,8 +72,11 @@ defmodule NostrEx.Socket do
       :exit, {{:shutdown, reason}, _msg} ->
         {:error, reason}
 
-      :exit, msg ->
-        Logger.error(msg)
+      :exit, {reason, msg} ->
+        {:error, "Exited with reason #{inspect(reason)}: #{inspect(msg)}"}
+
+      :exit, term ->
+        Logger.error(inspect(term))
         {:error, "Exited"}
     end
   end
