@@ -54,8 +54,8 @@ A simple event handler to print kind 1 notes might look like:
 receive do
   {:event, sub_id, %{kind: 1} = event} ->
     IO.puts(event.content)
-  {:eose, sub_id} ->
-    IO.puts("No more events for sub " <> sub_id)
+  {:eose, sub_id, relay} ->
+    IO.puts("No more events for sub " <> sub_id <> " from relay " <> relay)
   _ ->
     IO.puts(:stderr, "Unexpected message received")
 end
