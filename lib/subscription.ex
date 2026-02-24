@@ -65,17 +65,24 @@ defmodule NostrEx.Subscription do
   @spec normalize_filters(keyword() | [keyword()] | [Filter.t()]) ::
           {:ok, [Filter.t()]} | {:error, String.t()}
   defp normalize_filters([]), do: {:ok, []}
+  defp normalize_filters(filter) when is_map(filter), do: {:ok, parse_filter(filter)}
 
-  defp normalize_filters([%Filter{} | _] = filters), do: {:ok, filters}
+  defp normalize_filters([%Filter{} | _] = filters) do
+    if Enum.all?(filters, &is_struct(&1, Filter)) do
+      {:ok, filters}
+    else
+      {:error, "mixed filter types provided"}
+    end
+  end
 
   defp normalize_filters([{_key, _value} | _] = filter) do
-    filter_struct = Map.merge(%Filter{}, Enum.into(filter, %{}))
+    filter_struct = parse_filter(filter)
     {:ok, [filter_struct]}
   end
 
   defp normalize_filters([f | _] = filters) when is_list(f) do
     if Enum.all?(filters, &Keyword.keyword?/1) do
-      filter_structs = Enum.map(filters, &Map.merge(%Filter{}, Enum.into(&1, %{})))
+      filter_structs = Enum.map(filters, &parse_filter/1)
       {:ok, filter_structs}
     else
       {:error, "all filter elements must be keyword lists"}
@@ -83,6 +90,10 @@ defmodule NostrEx.Subscription do
   end
 
   defp normalize_filters(_), do: {:error, "invalid filter format"}
+
+  defp parse_filter(filter) when is_list(filter) do
+    filter |> Enum.into(%{}) |> Filter.parse()
+  end
 
   @spec generate_id() :: String.t()
   defp generate_id do
