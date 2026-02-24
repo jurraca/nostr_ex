@@ -232,7 +232,7 @@ defmodule NostrEx.Client do
     |> Message.serialize()
   end
 
-  @spec get_relays(nil | :all | [String.t()]) :: [String.t()]
+  @spec get_relays(nil | :all | String.t() | [String.t()]) :: [String.t()]
   defp get_relays(nil), do: get_relays(:all)
   defp get_relays(:all), do: RelayManager.registered_names()
 
@@ -245,6 +245,7 @@ defmodule NostrEx.Client do
     oks
   end
 
+  defp get_relays(relay) when is_binary(relay), do: get_relays([relay])
   defp get_relays(_relay_list), do: []
 
   defp normalize(relay) when is_binary(relay) do
