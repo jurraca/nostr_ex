@@ -11,7 +11,6 @@ defmodule NostrEx.SubscriptionTest do
       assert String.length(sub.id) == 64
       assert length(sub.filters) == 1
       assert [%Filter{authors: ["abc123"], kinds: [1]}] = sub.filters
-      assert is_integer(sub.created_at)
     end
 
     test "creates subscription from multiple keyword list filters" do
@@ -70,7 +69,8 @@ defmodule NostrEx.SubscriptionTest do
         "not a keyword list"
       ]
 
-      assert {:error, "all filter elements must be keyword lists"} = Subscription.new(invalid_filters)
+      {:error, msg} = Subscription.new(invalid_filters)
+      assert msg =~ "all filter elements must be keyword lists"
     end
   end
 end

@@ -49,15 +49,27 @@ defmodule NostrEx.Subscription do
   """
   @spec new(keyword() | [keyword()] | [Filter.t()]) :: {:ok, t()} | {:error, String.t()}
   def new(filters) when is_list(filters) do
-    with {:ok, filter_structs} <- normalize_filters(filters) do
+    case normalize_filters(filters) do
+      {:ok, filter_structs} ->
+        sub = %__MODULE__{
+          id: generate_id(),
+          filters: filter_structs,
+          created_at: DateTime.utc_now()
+        }
+  
+        {:ok, sub}
+      {:error, reason} -> {:error, reason}
+    end
+  end
+
+  def new(%Filter{} = filter) do
       sub = %__MODULE__{
         id: generate_id(),
-        filters: filter_structs,
-        created_at: DateTime.utc_now() |> DateTime.to_unix()
+        filters: [filter],
+        created_at: DateTime.utc_now()
       }
 
       {:ok, sub}
-    end
   end
 
   def new(_), do: {:error, "filters must be a keyword list or list of keyword lists"}
@@ -75,17 +87,20 @@ defmodule NostrEx.Subscription do
     end
   end
 
-  defp normalize_filters([{_key, _value} | _] = filter) do
-    filter_struct = parse_filter(filter)
-    {:ok, [filter_struct]}
-  end
-
   defp normalize_filters([f | _] = filters) when is_list(f) do
-    if Enum.all?(filters, &Keyword.keyword?/1) do
+    if Enum.all?(filters, &(Keyword.keyword?(&1) || is_map(&1))) do
       filter_structs = Enum.map(filters, &parse_filter/1)
       {:ok, filter_structs}
     else
-      {:error, "all filter elements must be keyword lists"}
+      {:error, "all filter elements must be keyword lists or maps"}
+    end
+  end
+
+  defp normalize_filters(filter) when is_list(filter) do
+    if Keyword.keyword?(filter) do
+      {:ok, [parse_filter(filter)]}
+    else
+      {:error, "invalid filter format"}
     end
   end
 
