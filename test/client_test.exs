@@ -89,6 +89,7 @@ defmodule NostrEx.ClientTest do
       # Invalid relay list should return error
       assert {:error, [{:invalid_relays, message}]} =
                Client.send_event(signed_event, send_via: ["nonexistent_relay"])
+
       assert message =~ "not connected"
     end
   end

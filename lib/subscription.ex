@@ -56,20 +56,22 @@ defmodule NostrEx.Subscription do
           filters: filter_structs,
           created_at: DateTime.utc_now()
         }
-  
+
         {:ok, sub}
-      {:error, reason} -> {:error, reason}
+
+      {:error, reason} ->
+        {:error, reason}
     end
   end
 
   def new(%Filter{} = filter) do
-      sub = %__MODULE__{
-        id: generate_id(),
-        filters: [filter],
-        created_at: DateTime.utc_now()
-      }
+    sub = %__MODULE__{
+      id: generate_id(),
+      filters: [filter],
+      created_at: DateTime.utc_now()
+    }
 
-      {:ok, sub}
+    {:ok, sub}
   end
 
   def new(_), do: {:error, "filters must be a keyword list or list of keyword lists"}

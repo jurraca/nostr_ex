@@ -103,6 +103,7 @@ defmodule NostrEx.Client do
 
       _ ->
         {:ok, _pid} = Registry.register(NostrEx.PubSub, sub_id, nil)
+
         Enum.each(relay_names, fn relay_name ->
           subscribe_to_relay(relay_name, sub_id, message)
         end)
