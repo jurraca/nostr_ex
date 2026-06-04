@@ -24,7 +24,6 @@ defmodule NostrEx.Socket do
   use GenServer, restart: :transient
 
   require Logger
-  require Mint.HTTP
 
   alias NostrEx.{RelayAgent, RelayRegistry}
   alias Nostr.Message
