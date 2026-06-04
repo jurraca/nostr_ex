@@ -50,7 +50,7 @@ NostrEx.send_sub(sub)
 
 NostrEx receives events at the process that created the subscription.
 A simple event handler to print kind 1 notes might look like:
-```
+```elixir
 receive do
   {:event, sub_id, %{kind: 1} = event} ->
     IO.puts(event.content)
