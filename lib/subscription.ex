@@ -79,7 +79,6 @@ defmodule NostrEx.Subscription do
   @spec normalize_filters(keyword() | [keyword()] | [Filter.t()]) ::
           {:ok, [Filter.t()]} | {:error, String.t()}
   defp normalize_filters([]), do: {:ok, []}
-  defp normalize_filters(filter) when is_map(filter), do: {:ok, parse_filter(filter)}
 
   defp normalize_filters([%Filter{} | _] = filters) do
     if Enum.all?(filters, &is_struct(&1, Filter)) do
@@ -111,6 +110,8 @@ defmodule NostrEx.Subscription do
   defp parse_filter(filter) when is_list(filter) do
     filter |> Enum.into(%{}) |> Filter.parse()
   end
+
+  defp parse_filter(_filter), do: {:error, "invalid filter"}
 
   @spec generate_id() :: String.t()
   defp generate_id do
