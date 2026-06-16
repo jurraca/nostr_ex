@@ -107,7 +107,7 @@ defmodule NostrEx.ClientTest do
     test "returns error with no relays connected" do
       sub = %NostrEx.Subscription{
         id: "test_sub_id",
-        filters: [%Nostr.Filter{}],
+        filters: [%NostrCore.Filter{}],
         created_at: DateTime.utc_now()
       }
 

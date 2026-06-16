@@ -1,10 +1,8 @@
 defmodule NostrEx.Signer.LocalTest do
   use ExUnit.Case, async: true
 
-  import ExUnit.CaptureLog
-
   alias NostrEx.Signer.Local
-  alias Nostr.Event
+  alias NostrCore.Event
 
   @private_key "5ee1c8000ab28edd64d74a7d951af749cfb0b7e1f31a4ad87940a55b0e7e6b3d"
   @expected_pubkey "d5659c8123bd7f15149bbf6a5772ce49af1ec280dff3d68e7e00359a4df1b9a5"
@@ -28,7 +26,7 @@ defmodule NostrEx.Signer.LocalTest do
     end
 
     test "sign_event/2 signs events using GenServer", %{signer_pid: signer_pid} do
-      event = Event.create(1, content: "test note")
+      {:ok, event} = Event.create(1, content: "test note")
 
       assert {:ok, signed_event} = Local.sign_event(signer_pid, event)
       assert is_binary(signed_event.id)
@@ -62,12 +60,11 @@ defmodule NostrEx.Signer.LocalTest do
     end
 
     test "handles signing errors gracefully", %{signer_pid: signer_pid} do
-      event = Event.create(1, content: "test")
+      {:ok, event} = Event.create(1, content: "test")
       invalid_event = %Event{event | id: "invalid"}
 
-      {result, log} = with_log(fn -> Local.sign_event(signer_pid, invalid_event) end)
-      assert {:error, "Failed to sign event: Event ID isn't correct"} = result
-      assert log =~ "Event ID isn't correct"
+      result = Local.sign_event(signer_pid, invalid_event)
+      assert {:error, :mismatched_id} = result
     end
   end
 end

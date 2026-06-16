@@ -26,7 +26,7 @@ defmodule NostrEx.Socket do
   require Logger
 
   alias NostrEx.{RelayAgent, RelayRegistry}
-  alias Nostr.Message
+  alias NostrCore.Message
 
   @default_connect_timeout 3_000
   @default_call_timeout 5_000

@@ -6,7 +6,7 @@ defmodule NostrEx.Client do
   Most users should use the `NostrEx` module instead.
   """
 
-  alias Nostr.{Event, Message}
+  alias NostrCore.{Event, Message}
   alias NostrEx.{RelayAgent, RelayManager, Socket, Utils}
 
   @type send_result ::
@@ -24,7 +24,7 @@ defmodule NostrEx.Client do
   @spec send_event(Event.t(), keyword()) :: send_result()
   def send_event(event, opts \\ [])
 
-  def send_event(%Nostr.Event{} = event, opts) do
+  def send_event(%Event{} = event, opts) do
     relay_names = get_relays(opts[:send_via])
 
     if relay_names == [] do
@@ -179,12 +179,7 @@ defmodule NostrEx.Client do
   end
 
   def sign_event(%Event{} = event, privkey) when is_binary(privkey) do
-    try do
-      signed_event = Event.sign(event, privkey)
-      {:ok, signed_event}
-    catch
-      _ -> {:error, "failed to sign event"}
-    end
+    Event.sign(event, privkey)
   end
 
   def sign_event(%Event{} = event, signer_pid) when is_pid(signer_pid) do

@@ -36,7 +36,7 @@ defmodule NostrEx do
   """
 
   alias NostrEx.{Client, RelayAgent, RelayManager, Subscription}
-  alias Nostr.Event
+  alias NostrCore.Event
 
   @type relay_name :: String.t()
   @type sub_id :: String.t()
@@ -125,8 +125,7 @@ defmodule NostrEx do
   @spec create_event(integer(), map() | keyword()) :: {:ok, Event.t()} | {:error, String.t()}
   def create_event(kind, attrs) when is_integer(kind) and is_list(attrs) do
     if Keyword.keyword?(attrs) do
-      event = Event.create(kind, attrs)
-      {:ok, event}
+      Event.create(kind, attrs)
     else
       {:error, "invalid attrs: must be a map or keyword list"}
     end

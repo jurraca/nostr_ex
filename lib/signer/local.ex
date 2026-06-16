@@ -8,9 +8,8 @@ defmodule NostrEx.Signer.Local do
   """
 
   use GenServer
-  require Logger
 
-  alias Nostr.Event
+  alias NostrCore.{Crypto, Event}
   alias NostrEx.Signer
 
   @behaviour Signer
@@ -45,7 +44,7 @@ defmodule NostrEx.Signer.Local do
 
   @impl GenServer
   def init(private_key) do
-    pubkey = Nostr.Crypto.pubkey(private_key)
+    {:ok, pubkey} = Crypto.pubkey(private_key)
     state = %{private_key: private_key, pubkey: pubkey}
     {:ok, state}
   end
@@ -75,12 +74,10 @@ defmodule NostrEx.Signer.Local do
 
   defp sign_event_impl(private_key, event) do
     try do
-      signed_event = Event.sign(event, private_key)
-      {:ok, signed_event}
+      Event.sign(event, private_key)
     rescue
       error in RuntimeError ->
         msg = "Failed to sign event: " <> error.message
-        Logger.error(msg)
         {:error, msg}
     end
   end

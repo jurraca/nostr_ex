@@ -1,5 +1,5 @@
 %{
-  "bechamel": {:hex, :bechamel, "1.0.0", "9cbcaed5dbf429c09d05d1c8c47cce503246b1f09f9954d765cf46c4f5005415", [:mix], [], "hexpm", "9b4c429ccf5d8045a90207383ace9a654d9b7254aedc74b9c7eee1c6226ceda7"},
+  "bechamel": {:hex, :bechamel, "1.1.0", "4e439a17e3e409ddf290aaf4151c33a466adb44416955de7b75f96caf0afca9c", [:mix], [], "hexpm", "42b3a5720ec94aa2ede20930f88d91efbe64179ae9764dbc2f560ddee102cbe5"},
   "castore": {:hex, :castore, "1.0.14", "4582dd7d630b48cf5e1ca8d3d42494db51e406b7ba704e81fbd401866366896a", [:mix], [], "hexpm", "7bc1b65249d31701393edaaac18ec8398d8974d52c647b7904d01b964137b9f4"},
   "earmark_parser": {:hex, :earmark_parser, "1.4.46", "67607a0532e810c6f630a515c548d0b24949643f168cc556303bee4cf96105c7", [:mix], [], "hexpm", "9c44636e8a1c68c62f526b2dcd85d941dbbcee7ab82cf64ba06ce28bef8e89f5"},
   "elixir_make": {:hex, :elixir_make, "0.9.0", "6484b3cd8c0cee58f09f05ecaf1a140a8c97670671a6a0e7ab4dc326c3109726", [:mix], [], "hexpm", "db23d4fd8b757462ad02f8aa73431a426fe6671c80b200d9710caf3d1dd0ffdb"},

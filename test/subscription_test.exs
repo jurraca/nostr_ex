@@ -1,7 +1,7 @@
 defmodule NostrEx.SubscriptionTest do
   use ExUnit.Case
   alias NostrEx.Subscription
-  alias Nostr.Filter
+  alias NostrCore.Filter
 
   describe "new/1" do
     test "creates subscription from single keyword list filter" do
