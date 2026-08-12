@@ -57,8 +57,8 @@ defmodule NostrEx.MixProject do
     [
       {:nostr_lib, "~> 0.2.0"},
       {:mint_web_socket, "~> 1.0.5"},
-      {:req, "~> 0.5.18"},
-      {:ex_doc, "~> 0.34", only: :dev, runtime: false, warn_if_outdated: true}
+      {:req, "~> 0.7.2"},
+      {:ex_doc, "~> 0.40.3", only: :dev, runtime: false, warn_if_outdated: true}
     ]
   end
 end
