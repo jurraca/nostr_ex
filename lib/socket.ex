@@ -361,9 +361,10 @@ defmodule NostrEx.Socket do
   end
 
   defp handle_frame({:text, text}, state) do
-    text
-    |> Message.parse()
-    |> handle_nostr_message(state)
+    case Message.parse(text) do
+      {:ok, data} -> handle_nostr_message(data, state)
+      {:error, _reason} -> state
+    end
   end
 
   defp handle_frame(frame, state) do
@@ -401,11 +402,6 @@ defmodule NostrEx.Socket do
       relay: state.uri.host
     })
 
-    state
-  end
-
-  defp handle_nostr_message(:error, state) do
-    Logger.error("Parse error for message from #{state.uri.host}")
     state
   end
 

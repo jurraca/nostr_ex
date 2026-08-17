@@ -58,11 +58,7 @@ defmodule NostrEx.MixProject do
       {:nostr_core, github: "jurraca/nostr_core"},
       {:mint_web_socket, "~> 1.0.5"},
       {:req, "~> 0.7.2"},
-<<<<<<< HEAD
       {:ex_doc, "~> 0.40.3", only: :dev, runtime: false, warn_if_outdated: true}
-=======
-      {:ex_doc, "~> 0.34", only: :dev, runtime: false, warn_if_outdated: true}
->>>>>>> fbca189 (req: 0.5 ~> 0.7.2)
     ]
   end
 end
