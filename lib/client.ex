@@ -89,6 +89,11 @@ defmodule NostrEx.Client do
   @doc """
   Send a Subscription struct to relays.
 
+  This is pure transport: it sends the REQ and records the sub in the
+  RelayAgent. It does NOT register any process to receive the subscription's
+  messages — call `NostrEx.listen/1` (before sending, to avoid missing early
+  events) from the process that should receive them.
+
   ## Options
   - `:send_via` - List of relay names. Defaults to all connected relays.
   """
@@ -102,8 +107,6 @@ defmodule NostrEx.Client do
         {:error, "no relays connected"}
 
       _ ->
-        {:ok, _pid} = Registry.register(NostrEx.PubSub, sub_id, nil)
-
         Enum.each(relay_names, fn relay_name ->
           subscribe_to_relay(relay_name, sub_id, message)
         end)

@@ -5,14 +5,15 @@ defmodule NostrEx do
   ## Quick Start
 
       # Connect to a relay
-      {:ok, "relay_damus_io"} = NostrEx.connect("wss://relay.damus.io")
+      {:ok, "relay.damus.io"} = NostrEx.connect("wss://relay.damus.io")
 
-      # Create sub
+      # Create sub, register the caller to receive its events, then send it
       {:ok, sub} = NostrEx.create_sub(authors: [pubkey], kinds: [1])
-      # Listen for events from that sub
-      NostrEx.listen(sub)
-      # Send sub
-      :ok = NostrEx.send_sub(sub)
+      :ok = NostrEx.listen(sub)
+      {:ok, _sub_id} = NostrEx.send_sub(sub)
+
+      # Or all three in one call:
+      {:ok, _sub} = NostrEx.subscribe(authors: [pubkey], kinds: [1])
 
       # Create, sign, and send an event
       {:ok, event} = NostrEx.create_event(1, content: "Hello Nostr!")
@@ -210,20 +211,55 @@ defmodule NostrEx do
   @doc """
   Send a subscription to relays.
 
+  Pure transport: does NOT register any process to receive the
+  subscription's messages. Call `listen/1` from the consuming process
+  (before sending) to receive events, or use `subscribe/2` when the caller
+  is also the consumer.
+
   ## Options
   - `:send_via` - List of relay names or URLs. Defaults to all connected relays.
 
   ## Examples
 
       iex> {:ok, sub} = NostrEx.create_sub(authors: [pubkey], kinds: [1])
+      iex> :ok = NostrEx.listen(sub)
       iex> NostrEx.send_sub(sub)
       {:ok, "123zyx..."}
 
-      iex> NostrEx.send_sub(sub, send_via: ["relay_damus_io"])
+      iex> NostrEx.send_sub(sub, send_via: ["relay.damus.io"])
       {:ok, "123zyx..."}
   """
   @spec send_sub(Subscription.t(), keyword()) :: {:ok, String.t()} | {:error, String.t()}
   def send_sub(%Subscription{} = sub, opts \\ []), do: Client.send_sub(sub, opts)
+
+  @doc """
+  Create a subscription, register the calling process to receive its
+  messages, and send it to relays.
+
+  Convenience wrapper around `create_sub/1` + `listen/1` + `send_sub/2` for
+  the common case where the calling process is also the consumer. Use the
+  separate functions when the sender and the consumer are different
+  processes.
+
+  Returns `{:ok, subscription}` so the caller can close it later.
+
+  ## Options
+  - `:send_via` - List of relay names or URLs. Defaults to all connected relays.
+
+  ## Examples
+
+      iex> {:ok, sub} = NostrEx.subscribe(authors: [pubkey], kinds: [1])
+      iex> receive do {:event, _sub_id, event} -> event end
+  """
+  @spec subscribe(keyword() | [keyword()], keyword()) ::
+          {:ok, Subscription.t()} | {:error, String.t()}
+  def subscribe(filters, opts \\ []) do
+    with {:ok, sub} <- create_sub(filters),
+         :ok <- listen(sub),
+         {:ok, _sub_id} <- send_sub(sub, opts) do
+      {:ok, sub}
+    end
+  end
 
   @doc """
   Close a subscription.
@@ -245,29 +281,46 @@ defmodule NostrEx do
   def close_sub(sub_id) when is_binary(sub_id), do: Client.close_sub(sub_id)
 
   @doc """
-  Register the current process to receive events for a subscription.
+  Register the current process to receive messages for a subscription.
+
+  Call this BEFORE `send_sub/2` (the sub id exists as soon as the
+  subscription is created) so no early events are missed.
 
   After calling this, your process will receive messages of the form:
   - `{:event, sub_id, event}` - When an event matches the subscription
   - `{:eose, sub_id, relay_host}` - End of stored events from a relay
+  - `{:close, sub_id, relay_host}` - The relay closed the subscription
 
-  Returns `:ok` if registration succeeds, or if already registered.
+  The special topic `:ok` receives relay `OK` acknowledgements for published
+  events as `%{event_id: ..., success: ..., message: ..., relay: ...}` maps.
+
+  Idempotent: registering the same process for the same topic twice does not
+  result in duplicate deliveries.
 
   ## Examples
 
       iex> {:ok, sub} = NostrEx.create_sub(kinds: [1])
-      iex> :ok = NostrEx.send_sub(sub)
-      iex> NostrEx.listen(sub)
-      :ok
+      iex> :ok = NostrEx.listen(sub)
+      iex> {:ok, _sub_id} = NostrEx.send_sub(sub)
   """
-  @spec listen(Subscription.t() | sub_id()) :: :ok
+  @spec listen(Subscription.t() | sub_id() | :ok) :: :ok
   def listen(%Subscription{id: sub_id}), do: do_listen(sub_id)
+  def listen(:ok), do: do_listen(:ok)
   def listen(sub_id) when is_binary(sub_id), do: do_listen(sub_id)
 
   defp do_listen(sub_id) do
-    case Registry.register(NostrEx.PubSub, sub_id, []) do
-      {:ok, _pid} -> :ok
-      {:error, {:already_registered, _}} -> :ok
+    already_registered? =
+      NostrEx.PubSub
+      |> Registry.lookup(sub_id)
+      |> Enum.any?(fn {pid, _} -> pid == self() end)
+
+    if already_registered? do
+      :ok
+    else
+      case Registry.register(NostrEx.PubSub, sub_id, []) do
+        {:ok, _pid} -> :ok
+        {:error, {:already_registered, _}} -> :ok
+      end
     end
   end
 
