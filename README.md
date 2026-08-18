@@ -76,7 +76,7 @@ iex(2)> privkey = :crypto.strong_rand_bytes(32) |> Base.encode16(case: :lower)
 
 # Create an event with kind and attrs
 iex(4)> NostrEx.create_event(1, content: "hello joe")
-{:ok, %Nostr.Event{
+{:ok, %NostrCore.Event{
   id: nil,
   pubkey: nil,
   kind: 1,
@@ -89,7 +89,7 @@ iex(4)> NostrEx.create_event(1, content: "hello joe")
 # Sign the event with your hex-encoded private key
 iex(3)> {:ok, signed} = NostrEx.sign_event(event, private_key)
 {:ok,
- %Nostr.Event{
+ %NostrCore.Event{
    id: "871a08bf8e1b6d286d92238ce44648a94f7397042dd01a4ecc6db0afed745ec3",
    pubkey: "93155d8268a995888fe935ed9de633be690303ab37ba9d698c9f715076a99563",
    kind: 1,
@@ -127,7 +127,7 @@ NostrEx uses a supervision tree with the following components:
 - `PubSub`: use Registry to dispatch events to listeners
 - `RelayRegistry`: Registry for mapping relay names to connection pids
 
-This library is built on [Sgiath](https://github.com/Sgiath)'s [nostr_lib](https://github.com/Sgiath/nostr-lib) library.
+Event, tag, filter, and message primitives come from [NostrCore](https://github.com/jurraca/nostr_core) (events, filters, tags, messages, bech32/NIP-19, secp256k1 crypto).
 This dependency compiles the libsecp256k1 C library for cryptographic operations,
 therefore you will need a C compiler to build this project.
 

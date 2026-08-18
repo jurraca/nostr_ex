@@ -3,7 +3,7 @@ defmodule NostrEx.Signer do
   Behaviour for signing Nostr events.
   """
 
-  alias Nostr.Event
+  alias NostrCore.Event
 
   @doc """
   Sign a Nostr event.

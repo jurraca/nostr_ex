@@ -121,7 +121,7 @@ defmodule NostrEx do
   ## Examples
 
       iex> NostrEx.create_event(1, content: "Hello!")
-      {:ok, %Nostr.Event{kind: 1, content: "Hello!", ...}}
+      {:ok, %NostrCore.Event{kind: 1, content: "Hello!", ...}}
   """
   @spec create_event(integer(), map() | keyword()) :: {:ok, Event.t()} | {:error, String.t()}
   def create_event(kind, attrs) when is_integer(kind) and is_list(attrs) do
