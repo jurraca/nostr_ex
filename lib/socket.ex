@@ -194,7 +194,7 @@ defmodule NostrEx.Socket do
 
       {:error, conn, reason, _responses} ->
         Logger.error("WebSocket stream error: #{inspect(reason)}")
-        new_state = %{state | conn: conn} |> reply_to_caller({:error, reason})
+        new_state = %{state | conn: conn} |> reply_to_caller({:error, error_message(reason)})
         {:noreply, new_state}
 
       :unknown ->
@@ -306,7 +306,7 @@ defmodule NostrEx.Socket do
 
       {:error, conn, reason} ->
         %{state | conn: conn}
-        |> reply_to_caller({:error, reason})
+        |> reply_to_caller({:error, "WebSocket upgrade failed: #{error_message(reason)}"})
     end
   end
 
@@ -319,11 +319,16 @@ defmodule NostrEx.Socket do
 
       {:error, websocket, reason} ->
         %{state | websocket: websocket}
-        |> reply_to_caller({:error, reason})
+        |> reply_to_caller({:error, error_message(reason)})
     end
   end
 
   defp handle_response(_response, state), do: state
+
+  # Mint errors arrive as exception structs; callers expect string reasons.
+  defp error_message(reason) when is_exception(reason), do: Exception.message(reason)
+  defp error_message(reason) when is_binary(reason), do: reason
+  defp error_message(reason), do: inspect(reason)
 
   @spec send_frame(%__MODULE__{}, tuple() | atom()) ::
           {:ok, %__MODULE__{}} | {:error, atom() | term()}
