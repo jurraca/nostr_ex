@@ -26,7 +26,7 @@ defmodule NostrEx.Socket do
   require Logger
 
   alias NostrEx.{RelayAgent, RelayRegistry}
-  alias NostrCore.Message
+  alias NostrCore.{Event, Message}
 
   @default_connect_timeout 3_000
   @default_call_timeout 5_000
@@ -415,6 +415,26 @@ defmodule NostrEx.Socket do
       relay: state.uri.host
     })
 
+    state
+  end
+
+  # Relay-initiated AUTH (NIP-42): the relay is requesting authentication.
+  # Clients `NostrEx.listen(:auth)` and receive `{:auth, %{challenge: c, relay: h}}`.
+  defp handle_nostr_message({:auth, challenge}, state) when is_binary(challenge) do
+    registry_dispatch(:auth, %{challenge: challenge, relay: state.uri.host})
+    state
+  end
+
+  # Relay echoing back the client's AUTH event as an ack. Distinguished from
+  # the challenge case by the event struct payload.
+  defp handle_nostr_message({:auth, %Event{} = event}, state) do
+    registry_dispatch(:auth, %{event: event, relay: state.uri.host})
+    state
+  end
+
+  # NIP-45 COUNT reply. Sub-scoped topic `{:count, sub_id}`.
+  defp handle_nostr_message({:count, sub_id, payload}, state) do
+    registry_dispatch({:count, sub_id}, %{payload: payload, relay: state.uri.host})
     state
   end
 
