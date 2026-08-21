@@ -384,7 +384,11 @@ defmodule NostrEx.Socket do
   end
 
   defp handle_nostr_message({:notice, message}, state) do
-    Logger.notice("NOTICE from #{state.uri.host}: #{message}")
+    Logger.debug("NOTICE from #{state.uri.host}: #{message}")
+    sub_ids = RelayAgent.get(state.name) || []
+    for sub_id <- sub_ids do
+      registry_dispatch(sub_id, {:notice, sub_id, state.uri.host, message})
+    end
     state
   end
 
@@ -402,7 +406,7 @@ defmodule NostrEx.Socket do
   # Relay-initiated CLOSED (NIP-01): the relay is terminating the subscription.
   defp handle_nostr_message({:closed, sub_id, message}, state) do
     Logger.info("Relay #{state.uri.host} closed subscription #{sub_id}: #{message}")
-    registry_dispatch(sub_id, {:close, sub_id, state.uri.host})
+    registry_dispatch(sub_id, {:close, sub_id, state.uri.host, message})
     RelayAgent.delete_subscription(state.name, sub_id)
     state
   end

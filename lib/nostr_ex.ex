@@ -303,9 +303,10 @@ defmodule NostrEx do
       iex> :ok = NostrEx.listen(sub)
       iex> {:ok, _sub_id} = NostrEx.send_sub(sub)
   """
-  @spec listen(Subscription.t() | sub_id() | :ok) :: :ok
+  @spec listen(Subscription.t() | sub_id() | :ok | :auth) :: :ok
   def listen(%Subscription{id: sub_id}), do: do_listen(sub_id)
   def listen(:ok), do: do_listen(:ok)
+  def listen(:auth), do: do_listen(:auth)
   def listen(sub_id) when is_binary(sub_id), do: do_listen(sub_id)
 
   defp do_listen(sub_id) do
