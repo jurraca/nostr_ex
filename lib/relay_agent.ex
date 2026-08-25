@@ -59,10 +59,13 @@ defmodule NostrEx.RelayAgent do
 
   @spec delete_subscription(String.t(), String.t()) :: :ok
   def delete_subscription(relay_name, sub_id) do
-    Agent.update(
-      __MODULE__,
-      &Map.update(&1, relay_name, nil, fn existing -> List.delete(existing, sub_id) end)
-    )
+    Agent.update(__MODULE__, fn state ->
+      case Map.fetch(state, relay_name) do
+        {:ok, subs} -> Map.put(state, relay_name, List.delete(subs, sub_id))
+        # Unknown relay: nothing to clean up; never plant a phantom key.
+        :error -> state
+      end
+    end)
   end
 
   @spec delete_relay(String.t()) :: :ok

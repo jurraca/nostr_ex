@@ -179,6 +179,54 @@ defmodule NostrEx.IntegrationTest do
   # Generous default: passing polls exit early; only genuine failures pay
   # the full budget. Tolerates occasional multi-second delivery jitter on
   # otherwise-idle loopback connections.
+  describe "subscription bookkeeping" do
+    test "relay-rejected subscription is cleaned up and never resurrected", %{relay: relay} do
+      {:ok, name} = NostrEx.connect(FakeRelay.url(relay))
+
+      {:ok, sub} = NostrEx.create_sub(kinds: [999_001], limit: 1)
+      :ok = NostrEx.listen(sub)
+
+      {:ok, _sub_id} = NostrEx.send_sub(sub, send_via: [name])
+
+      # Record-before-send invariant: the entry exists as soon as the REQ
+      # has been written.
+      eventually(fn ->
+        assert sub.id in (NostrEx.RelayAgent.get(name) || [])
+      end)
+
+      # Relay rejects the REQ with CLOSED.
+      FakeRelay.push_closed(relay, sub.id, "unsupported")
+
+      eventually(fn ->
+        assert [] == NostrEx.RelayAgent.get(name) || nil == NostrEx.RelayAgent.get(name)
+      end)
+
+      # Give any resurrection race a chance to manifest.
+      Process.sleep(100)
+      refute sub.id in (NostrEx.RelayAgent.get(name) || [])
+    end
+
+    test "delete_subscription on an unknown relay plants no phantom key" do
+      :ok = NostrEx.RelayAgent.delete_subscription("never_seen_relay", "sub_x")
+      refute Map.has_key?(NostrEx.RelayAgent.state(), "never_seen_relay")
+    end
+
+    test "send_sub to dead relay records nothing", %{relay: relay} do
+      {:ok, name} = NostrEx.connect(FakeRelay.url(relay))
+      {:ok, sub} = NostrEx.create_sub(kinds: [1])
+      :ok = NostrEx.listen(sub)
+
+      FakeRelay.close_gracefully(relay)
+
+      eventually(fn ->
+        assert {:error, :not_found} = NostrEx.RelayManager.lookup(name)
+      end)
+
+      assert {:error, "no relays connected"} = NostrEx.send_sub(sub)
+      assert NostrEx.list_subs() == []
+    end
+  end
+
   defp eventually(fun, timeout \\ 5_000) do
     deadline = System.monotonic_time(:millisecond) + timeout
     do_eventually(fun, deadline)

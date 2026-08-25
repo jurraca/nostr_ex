@@ -175,9 +175,17 @@ defmodule NostrEx.Client do
 
   @spec subscribe_to_relay(atom(), String.t(), binary()) :: :ok | {:error, String.t()}
   defp subscribe_to_relay(relay_name, sub_id, payload) when is_binary(sub_id) do
-    with :ok <- send_to_relay(relay_name, payload),
-         :ok <- RelayAgent.update(relay_name, sub_id) do
-      :ok
+    # Record before writing the REQ: a fast relay rejection (CLOSED) must be
+    # able to clean up an entry that already exists, never resurrect one.
+    :ok = RelayAgent.update(relay_name, sub_id)
+
+    case send_to_relay(relay_name, payload) do
+      :ok ->
+        :ok
+
+      {:error, reason} ->
+        RelayAgent.delete_subscription(relay_name, sub_id)
+        {:error, reason}
     end
   end
 
