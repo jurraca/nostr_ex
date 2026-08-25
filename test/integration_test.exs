@@ -152,6 +152,32 @@ defmodule NostrEx.IntegrationTest do
       assert match?({:error, _}, NostrEx.Socket.send_message(name, "[]"))
     end
 
+    test "send_event delivers to all connected relays concurrently" do
+      {:ok, ra} = FakeRelay.start_link()
+      {:ok, rb} = FakeRelay.start_link(ip: {127, 0, 0, 2})
+
+      {:ok, name_a} = NostrEx.connect(FakeRelay.url(ra))
+      {:ok, _name_b} = NostrEx.connect(FakeRelay.url(rb))
+
+      privkey = :crypto.strong_rand_bytes(32) |> Base.encode16(case: :lower)
+      {:ok, event} = NostrEx.create_event(1, content: "broadcast")
+      {:ok, signed} = NostrEx.sign_event(event, privkey)
+
+      assert {:ok, event_id, []} = NostrEx.send_event(signed)
+
+      for {relay, host} <- [{ra, "127.0.0.1"}, {rb, "127.0.0.2"}] do
+        assert frame =
+                 FakeRelay.wait_for(relay, fn msgs ->
+                   Enum.find(msgs, &String.contains?(&1, ~s("EVENT")))
+                 end),
+               "relay #{host} never received the event"
+
+        assert ["EVENT", %{"id" => ^event_id}] = JSON.decode!(frame)
+      end
+
+      assert name_a in NostrEx.list_relays()
+    end
+
     test "send_event targets only connected relays" do
       # Distinct loopback IPs: relay identity is hostname-based, so two
       # relays on 127.0.0.1 would collapse into a single connection.
