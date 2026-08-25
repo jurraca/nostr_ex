@@ -191,8 +191,8 @@ defmodule NostrEx.Socket do
     {:stop, :normal, state}
   end
 
-  def handle_info({:tcp_closed, _port}, state) do
-    Logger.debug("Connection closed by remote #{state.uri.host}.")
+  def handle_info({tag, _socket}, state) when tag in [:tcp_closed, :ssl_closed] do
+    Logger.debug("Transport closed by remote #{state.uri.host}.")
     new_state = %{state | closing?: true, ready?: false, websocket: nil}
     {:stop, :normal, new_state}
   end

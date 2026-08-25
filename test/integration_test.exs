@@ -4,6 +4,13 @@ defmodule NostrEx.IntegrationTest do
   alias NostrEx.TestSupport.FakeRelay
 
   setup do
+    # Transient restarts can land asynchronously after a previous test's
+    # cleanup, leaving a blank socket registered globally. Purge any
+    # leftovers so every test starts from a clean slate.
+    Enum.each(NostrEx.RelayManager.active_pids(), fn pid ->
+      DynamicSupervisor.terminate_child(NostrEx.RelayManager, pid)
+    end)
+
     {:ok, relay} = FakeRelay.start_link()
 
     on_exit(fn ->
@@ -105,17 +112,15 @@ defmodule NostrEx.IntegrationTest do
       assert {:error, :relay_down} = NostrEx.Socket.send_message("never_connected_relay", "x")
     end
 
-    test "send_event after relay close returns errors, caller survives", %{relay: relay} do
+    test "send_event after relay disconnect returns errors, caller survives", %{relay: relay} do
       {:ok, name} = NostrEx.connect(FakeRelay.url(relay))
 
       privkey = :crypto.strong_rand_bytes(32) |> Base.encode16(case: :lower)
       {:ok, event} = NostrEx.create_event(1, content: "doomed")
       {:ok, signed} = NostrEx.sign_event(event, privkey)
 
-      # Graceful websocket close: handled frame-by-frame by the socket
-      # process itself, so teardown is deterministic (unlike abrupt
-      # transport drops, whose client-visible timing is not).
-      FakeRelay.close_gracefully(relay)
+      # Synchronous teardown: no transport-timing involved.
+      :ok = NostrEx.disconnect(name)
 
       eventually(fn ->
         assert {:error, :not_found} = NostrEx.RelayManager.lookup(name)
@@ -211,12 +216,13 @@ defmodule NostrEx.IntegrationTest do
       refute Map.has_key?(NostrEx.RelayAgent.state(), "never_seen_relay")
     end
 
-    test "send_sub to dead relay records nothing", %{relay: relay} do
+    test "send_sub to disconnected relay records nothing", %{relay: relay} do
       {:ok, name} = NostrEx.connect(FakeRelay.url(relay))
       {:ok, sub} = NostrEx.create_sub(kinds: [1])
       :ok = NostrEx.listen(sub)
 
-      FakeRelay.close_gracefully(relay)
+      # Synchronous teardown: no transport-timing involved.
+      :ok = NostrEx.disconnect(name)
 
       eventually(fn ->
         assert {:error, :not_found} = NostrEx.RelayManager.lookup(name)
@@ -224,6 +230,31 @@ defmodule NostrEx.IntegrationTest do
 
       assert {:error, "no relays connected"} = NostrEx.send_sub(sub)
       assert NostrEx.list_subs() == []
+    end
+  end
+
+  describe "transport close handling" do
+    # Mint delivers {tag, socket} messages; the tag depends on the transport
+    # (:tcp for ws://, :ssl for wss://). The clauses must treat both alike.
+    @tags [:tcp_closed, :ssl_closed]
+
+    test "socket terminates cleanly on either transport-close tag", %{relay: relay} do
+      for tag <- @tags do
+        {:ok, name} = NostrEx.connect(FakeRelay.url(relay))
+        {:ok, pid} = NostrEx.RelayManager.lookup(name)
+        status = NostrEx.Socket.get_status(pid)
+        assert status.ready?
+
+        # Synthesize the exact message shape Mint delivers on transport death.
+        send(pid, {tag, :fake_socket})
+
+        eventually(fn ->
+          assert {:error, :not_found} = NostrEx.RelayManager.lookup(name)
+        end)
+
+        # terminate/2 ran: subscription bookkeeping was cleaned up.
+        assert NostrEx.list_subs() == []
+      end
     end
   end
 
