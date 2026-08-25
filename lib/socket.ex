@@ -122,17 +122,24 @@ defmodule NostrEx.Socket do
 
   @impl GenServer
   @spec handle_call(:connect, GenServer.from(), %__MODULE__{}) ::
-          {:noreply, %__MODULE__{}} | {:stop, {:shutdown, String.t()}, %__MODULE__{}}
-  def handle_call(:connect, from, %{uri: uri} = state) do
-    case establish_connection(uri) do
+          {:noreply, %__MODULE__{}}
+          | {:reply, {:error, :already_connected | :already_connecting}, %__MODULE__{}}
+          | {:stop, {:shutdown, String.t()}, %__MODULE__{}}
+  def handle_call(:connect, from, %{conn: nil} = state) do
+    case establish_connection(state.uri) do
       {:ok, conn, request_ref} ->
-        new_state = %{state | conn: conn, request_ref: request_ref, caller: from}
-        {:noreply, new_state}
+        {:noreply, %{state | conn: conn, request_ref: request_ref, caller: from}}
 
       {:error, reason} ->
         {:stop, {:shutdown, reason}, state}
     end
   end
+
+  def handle_call(:connect, _from, %{ready?: true} = state),
+    do: {:reply, {:error, :already_connected}, state}
+
+  def handle_call(:connect, _from, state),
+    do: {:reply, {:error, :already_connecting}, state}
 
   @impl GenServer
   @spec handle_call({:send_text, binary()}, GenServer.from(), %__MODULE__{}) ::
@@ -305,7 +312,8 @@ defmodule NostrEx.Socket do
         |> reply_to_caller({:ok, :connected})
 
       {:error, conn, reason} ->
-        %{state | conn: conn}
+        # Mark closing? so handle_info tears the connection down after replying.
+        %{state | conn: conn, closing?: true}
         |> reply_to_caller({:error, "WebSocket upgrade failed: #{error_message(reason)}"})
     end
   end

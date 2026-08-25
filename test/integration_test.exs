@@ -45,4 +45,75 @@ defmodule NostrEx.IntegrationTest do
     assert [req_text] = FakeRelay.received(relay)
     assert req_text =~ ~s("REQ")
   end
+
+  describe "connect" do
+    test "concurrent connects to the same relay yield one connection", %{relay: relay} do
+      url = FakeRelay.url(relay)
+
+      results =
+        1..4
+        |> Enum.map(fn _ -> Task.async(fn -> NostrEx.connect(url) end) end)
+        |> Enum.map(&Task.await(&1, 10_000))
+
+      assert Enum.all?(results, &match?({:ok, _name}, &1))
+      assert [name] = Enum.uniq(for {:ok, n} <- results, do: n)
+
+      eventually(fn ->
+        assert NostrEx.RelayManager.ready?(name)
+        assert length(NostrEx.RelayManager.active_pids()) == 1
+      end)
+    end
+
+    test "failed handshake leaves no orphan child", %{relay: relay} do
+      port = FakeRelay.port(relay)
+      :ok = FakeRelay.stop(relay)
+
+      assert {:error, _reason} = NostrEx.connect("ws://127.0.0.1:#{port}")
+
+      eventually(fn ->
+        assert NostrEx.RelayManager.active_pids() == []
+      end)
+    end
+
+    test "connect heals when an existing socket dies before being used", %{relay: relay} do
+      url = FakeRelay.url(relay)
+      name = NostrEx.Utils.name_from_host(URI.parse(url).host)
+
+      # Start a socket directly and kill it, leaving a stale registry corpse.
+      {:ok, pid} =
+        DynamicSupervisor.start_child(NostrEx.RelayManager, {
+          NostrEx.Socket,
+          %{uri: URI.parse(url) |> Map.put(:path, "/"), name: name}
+        })
+
+      Process.exit(pid, :kill)
+      Process.sleep(50)
+
+      assert {:ok, ^name} = NostrEx.connect(url)
+      assert NostrEx.RelayManager.ready?(name)
+    end
+
+    test "sequential connect to an already-connected relay adds no child", %{relay: relay} do
+      assert {:ok, name} = NostrEx.connect(FakeRelay.url(relay))
+      assert {:ok, ^name} = NostrEx.connect(FakeRelay.url(relay))
+      assert length(NostrEx.RelayManager.active_pids()) == 1
+    end
+  end
+
+  defp eventually(fun, timeout \\ 2_000) do
+    deadline = System.monotonic_time(:millisecond) + timeout
+    do_eventually(fun, deadline)
+  end
+
+  defp do_eventually(fun, deadline) do
+    fun.()
+  rescue
+    ExUnit.AssertionError ->
+      if System.monotonic_time(:millisecond) > deadline do
+        raise "eventually/2 timed out"
+      else
+        Process.sleep(20)
+        do_eventually(fun, deadline)
+      end
+  end
 end
