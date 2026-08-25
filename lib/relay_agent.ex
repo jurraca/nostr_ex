@@ -1,7 +1,13 @@
 defmodule NostrEx.RelayAgent do
   @moduledoc """
-    Agent that maps relay connections to their active subscriptions.
-    We use this to manage subscription lifecycle and track which relays have which subscriptions.
+  Agent mapping relay connections to their active subscriptions.
+
+  State shape: `%{relay_name => %{sub_id => serialized_req_payload}}`.
+
+  This is the source of truth for subscription payloads: it survives socket
+  process death, so a reconnecting socket can replay its REQs after coming
+  back up (and a crash-respawned socket can restore subscriptions that were
+  active before the crash).
   """
   use Agent
 
@@ -10,21 +16,31 @@ defmodule NostrEx.RelayAgent do
     Agent.start_link(fn -> initial_value end, name: __MODULE__)
   end
 
-  @spec state() :: %{String.t() => [String.t()]}
+  @spec state() :: %{String.t() => %{String.t() => binary()}}
   def state do
     Agent.get(__MODULE__, & &1)
   end
 
-  @spec get(String.t()) :: [String.t()] | nil
+  @doc "All subscriptions recorded for a relay: %{sub_id => payload}."
+  @spec get(String.t()) :: %{String.t() => binary()} | nil
   def get(relay_name) do
     Agent.get(__MODULE__, &Map.get(&1, relay_name))
+  end
+
+  @doc "Subscription IDs recorded for a relay."
+  @spec subscription_ids(String.t()) :: [String.t()]
+  def subscription_ids(relay_name) do
+    case get(relay_name) do
+      nil -> []
+      subs -> Map.keys(subs)
+    end
   end
 
   @spec get_relays_for_sub(String.t()) :: [String.t()]
   def get_relays_for_sub(sub_id) do
     Agent.get(__MODULE__, fn state ->
       state
-      |> Enum.filter(fn {_relay, subs} -> sub_id in subs end)
+      |> Enum.filter(fn {_relay, subs} -> Map.has_key?(subs, sub_id) end)
       |> Enum.map(fn {relay, _subs} -> relay end)
     end)
   end
@@ -33,7 +49,7 @@ defmodule NostrEx.RelayAgent do
   def get_relays_by_sub do
     state()
     |> Enum.reduce(%{}, fn {relay_name, subs}, acc ->
-      Enum.reduce(subs, acc, fn sub, inner_acc ->
+      Enum.reduce(Map.keys(subs), acc, fn sub, inner_acc ->
         Map.update(inner_acc, sub, [relay_name], &[relay_name | &1])
       end)
     end)
@@ -41,19 +57,18 @@ defmodule NostrEx.RelayAgent do
 
   @spec get_unique_subscriptions() :: [String.t()]
   def get_unique_subscriptions() do
-    Agent.get(__MODULE__, fn state -> state |> Map.values() |> List.flatten() |> Enum.uniq() end)
+    Agent.get(__MODULE__, fn state ->
+      state |> Map.values() |> Enum.flat_map(&Map.keys/1) |> Enum.uniq()
+    end)
   end
 
-  @spec update(String.t(), String.t()) :: :ok
-  def update(relay_name, sub_id) do
+  # Records before sending (see Client.subscribe_to_relay): a fast relay
+  # rejection must be able to clean up an entry that already exists.
+  @spec put_subscription(String.t(), String.t(), binary()) :: :ok
+  def put_subscription(relay_name, sub_id, payload) when is_binary(payload) do
     Agent.update(__MODULE__, fn state ->
-      Map.update(state, relay_name, [sub_id], fn existing ->
-        if sub_id in existing do
-          existing
-        else
-          [sub_id | existing]
-        end
-      end)
+      subs = Map.get(state, relay_name, %{})
+      Map.put(state, relay_name, Map.put(subs, sub_id, payload))
     end)
   end
 
@@ -61,9 +76,18 @@ defmodule NostrEx.RelayAgent do
   def delete_subscription(relay_name, sub_id) do
     Agent.update(__MODULE__, fn state ->
       case Map.fetch(state, relay_name) do
-        {:ok, subs} -> Map.put(state, relay_name, List.delete(subs, sub_id))
+        {:ok, subs} ->
+          remaining = Map.delete(subs, sub_id)
+
+          if remaining == %{} do
+            Map.delete(state, relay_name)
+          else
+            Map.put(state, relay_name, remaining)
+          end
+
         # Unknown relay: nothing to clean up; never plant a phantom key.
-        :error -> state
+        :error ->
+          state
       end
     end)
   end

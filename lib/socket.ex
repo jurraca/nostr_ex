@@ -227,12 +227,12 @@ defmodule NostrEx.Socket do
   @impl GenServer
   @spec terminate(term(), %__MODULE__{}) :: :ok
   def terminate(_reason, state) do
-    case RelayAgent.get(state.name) do
-      nil ->
+    case RelayAgent.subscription_ids(state.name) do
+      [] ->
         :ok
 
-      subscriptions when is_list(subscriptions) ->
-        Enum.each(subscriptions, fn sub_id ->
+      sub_ids ->
+        Enum.each(sub_ids, fn sub_id ->
           close_message =
             sub_id
             |> Message.close()
@@ -408,7 +408,7 @@ defmodule NostrEx.Socket do
 
   defp handle_nostr_message({:notice, message}, state) do
     Logger.debug("NOTICE from #{state.uri.host}: #{message}")
-    sub_ids = RelayAgent.get(state.name) || []
+    sub_ids = RelayAgent.subscription_ids(state.name)
 
     for sub_id <- sub_ids do
       registry_dispatch(sub_id, {:notice, sub_id, state.uri.host, message})

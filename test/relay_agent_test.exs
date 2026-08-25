@@ -2,6 +2,8 @@ defmodule NostrEx.RelayAgentTest do
   use ExUnit.Case
   alias NostrEx.RelayAgent
 
+  @payload ~s(["REQ","sub_1",{}])
+
   setup do
     RelayAgent.start_link(%{})
 
@@ -16,67 +18,80 @@ defmodule NostrEx.RelayAgentTest do
     assert RelayAgent.state() == %{}
   end
 
-  test "can get relay subscriptions" do
-    relay_id = "relay1"
-    assert RelayAgent.get(relay_id) == nil
+  test "get returns nil for unknown relay" do
+    assert RelayAgent.get("relay1") == nil
+    assert RelayAgent.subscription_ids("relay1") == []
   end
 
-  test "can update relay subscriptions" do
-    relay_id = "relay1"
-    sub_id = :test_sub
+  test "put_subscription records sub_id -> payload" do
+    :ok = RelayAgent.put_subscription("relay1", "sub_1", @payload)
 
-    assert :ok = RelayAgent.update(relay_id, sub_id)
-    assert RelayAgent.get(relay_id) == [sub_id]
-
-    # Adding same subscription again doesn't duplicate
-    assert :ok = RelayAgent.update(relay_id, sub_id)
-    assert RelayAgent.get(relay_id) == [sub_id]
+    assert RelayAgent.get("relay1") == %{"sub_1" => @payload}
+    assert RelayAgent.subscription_ids("relay1") == ["sub_1"]
   end
 
-  test "can delete subscriptions" do
-    relay_id = "relay1"
-    sub_id = :test_sub
+  test "re-put is idempotent and refreshes payload" do
+    :ok = RelayAgent.put_subscription("relay1", "sub_1", "old")
+    :ok = RelayAgent.put_subscription("relay1", "sub_1", @payload)
 
-    RelayAgent.update(relay_id, sub_id)
-    assert RelayAgent.get(relay_id) == [sub_id]
+    assert RelayAgent.get("relay1") == %{"sub_1" => @payload}
+  end
 
-    RelayAgent.delete_subscription(relay_id, sub_id)
-    assert RelayAgent.get(relay_id) == []
+  test "delete_subscription removes the relay key once empty" do
+    :ok = RelayAgent.put_subscription("relay1", "sub_1", @payload)
+    :ok = RelayAgent.delete_subscription("relay1", "sub_1")
+
+    assert RelayAgent.get("relay1") == nil
+  end
+
+  test "delete_subscription keeps other subs of the same relay" do
+    :ok = RelayAgent.put_subscription("relay1", "sub_1", "p1")
+    :ok = RelayAgent.put_subscription("relay1", "sub_2", "p2")
+
+    :ok = RelayAgent.delete_subscription("relay1", "sub_1")
+
+    assert RelayAgent.subscription_ids("relay1") == ["sub_2"]
+  end
+
+  test "delete_subscription on unknown relay plants no phantom key" do
+    :ok = RelayAgent.delete_subscription("never_seen", "sub_x")
+
+    refute Map.has_key?(RelayAgent.state(), "never_seen")
   end
 
   test "can delete entire relay" do
-    relay_id = "relay1"
-    sub_id = :test_sub
+    :ok = RelayAgent.put_subscription("relay1", "sub_1", @payload)
+    :ok = RelayAgent.delete_relay("relay1")
 
-    RelayAgent.update(relay_id, sub_id)
-    assert RelayAgent.get(relay_id) == [sub_id]
-
-    RelayAgent.delete_relay(relay_id)
-    assert RelayAgent.get(relay_id) == nil
+    assert RelayAgent.get("relay1") == nil
   end
 
   test "can get relays for subscription" do
-    relay1 = "relay1"
-    relay2 = "relay2"
-    sub_id = :test_sub
+    :ok = RelayAgent.put_subscription("relay1", "sub_1", @payload)
+    :ok = RelayAgent.put_subscription("relay2", "sub_1", @payload)
 
-    RelayAgent.update(relay1, sub_id)
-    RelayAgent.update(relay2, sub_id)
-
-    relays = RelayAgent.get_relays_for_sub(sub_id)
+    relays = RelayAgent.get_relays_for_sub("sub_1")
     assert length(relays) == 2
-    assert relay1 in relays
-    assert relay2 in relays
+    assert "relay1" in relays
+    assert "relay2" in relays
   end
 
   test "inverts the relay->subs mapping to sub->relays" do
-    # Setup: two relays with overlapping subscriptions
-    RelayAgent.update("relay.damus.io", "sub_1")
-    RelayAgent.update("relay.damus.io", "sub_2")
+    :ok = RelayAgent.put_subscription("relay.damus.io", "sub_1", "p")
+    :ok = RelayAgent.put_subscription("relay.damus.io", "sub_2", "p")
     # sub_1 on both relays
-    RelayAgent.update("relay.nostr.band", "sub_1")
+    :ok = RelayAgent.put_subscription("relay.nostr.band", "sub_1", "p")
+
     result = RelayAgent.get_relays_by_sub()
     assert result["sub_1"] |> Enum.sort() == ["relay.damus.io", "relay.nostr.band"]
     assert result["sub_2"] == ["relay.damus.io"]
+  end
+
+  test "unique subscriptions flatten across relays" do
+    :ok = RelayAgent.put_subscription("relay.damus.io", "sub_1", "p")
+    :ok = RelayAgent.put_subscription("relay.damus.io", "sub_2", "p")
+    :ok = RelayAgent.put_subscription("relay.nostr.band", "sub_1", "p")
+
+    assert RelayAgent.get_unique_subscriptions() |> Enum.sort() == ["sub_1", "sub_2"]
   end
 end

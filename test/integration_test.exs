@@ -233,19 +233,19 @@ defmodule NostrEx.IntegrationTest do
       # Record-before-send invariant: the entry exists as soon as the REQ
       # has been written.
       eventually(fn ->
-        assert sub.id in (NostrEx.RelayAgent.get(name) || [])
+        assert sub.id in NostrEx.RelayAgent.subscription_ids(name)
       end)
 
       # Relay rejects the REQ with CLOSED.
       FakeRelay.push_closed(relay, sub.id, "unsupported")
 
       eventually(fn ->
-        assert [] == NostrEx.RelayAgent.get(name) || nil == NostrEx.RelayAgent.get(name)
+        assert [] == NostrEx.RelayAgent.subscription_ids(name)
       end)
 
       # Give any resurrection race a chance to manifest.
       Process.sleep(100)
-      refute sub.id in (NostrEx.RelayAgent.get(name) || [])
+      refute sub.id in NostrEx.RelayAgent.subscription_ids(name)
     end
 
     test "delete_subscription on an unknown relay plants no phantom key" do
