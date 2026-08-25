@@ -42,7 +42,7 @@ defmodule NostrExTest do
   describe "send_event/2" do
     test "returns error if event is not signed" do
       {:ok, event} = NostrEx.create_event(1, content: "unsigned")
-      assert {:error, "event must be signed before sending"} = NostrEx.send_event(event)
+      assert {:error, :unsigned_event, []} = NostrEx.send_event(event)
     end
   end
 
@@ -90,12 +90,12 @@ defmodule NostrExTest do
 
   describe "close_sub/1" do
     test "returns error for non-existent subscription ID" do
-      assert {:error, _} = NostrEx.close_sub("nonexistent_sub_id")
+      assert {:error, :sub_not_found, []} = NostrEx.close_sub("nonexistent_sub_id")
     end
 
     test "works with Subscription struct" do
       {:ok, sub} = NostrEx.create_sub(kinds: [1])
-      assert {:error, _} = NostrEx.close_sub(sub)
+      assert {:error, :sub_not_found, []} = NostrEx.close_sub(sub)
     end
   end
 
@@ -124,7 +124,7 @@ defmodule NostrExTest do
       assert %NostrEx.Subscription{} = sub
       assert String.length(sub.id) == 64
 
-      assert {:error, "no relays connected"} = NostrEx.send_sub(sub)
+      assert {:error, :no_relays, []} = NostrEx.send_sub(sub)
 
       assert :ok = NostrEx.listen(sub)
     end

@@ -58,14 +58,14 @@ defmodule NostrEx.ClientTest do
     test "returns error for invalid event" do
       invalid_event = %{not: "an event"}
 
-      assert {:error, [{:invalid_event, "must be an %Event{} struct"}]} =
+      assert {:error, {:invalid_event, "must be an %Event{} struct"}, []} =
                Client.sign_and_send_event(invalid_event, @privkey, [])
     end
 
     test "returns error when signing fails with invalid signer" do
       {:ok, event} = NostrEx.create_event(1, content: "test content")
 
-      assert {:error, [{:signing_failed, message}]} =
+      assert {:error, {:signing_failed, message}, []} =
                Client.sign_and_send_event(event, 12345, [])
 
       assert message =~ "signer must be a binary private key"
@@ -77,20 +77,15 @@ defmodule NostrEx.ClientTest do
       {:ok, event} = NostrEx.create_event(1, content: "test content")
       {:ok, signed_event} = NostrEx.sign_event(event, @privkey)
 
-      # With no relays connected, should return error with failures list
-      assert {:error, [{:no_relays, message}]} = Client.send_event(signed_event)
-      assert message =~ "no relays"
+      assert {:error, :no_relays, []} = Client.send_event(signed_event)
     end
 
-    test "returns error when invalid relay list provided" do
+    test "reports unknown send_via relays as failures instead of dropping them" do
       {:ok, event} = NostrEx.create_event(1, content: "test content")
       {:ok, signed_event} = NostrEx.sign_event(event, @privkey)
 
-      # Invalid relay list should return error
-      assert {:error, [{:invalid_relays, message}]} =
+      assert {:error, :no_relays, [{"nonexistent_relay", :not_connected}]} =
                Client.send_event(signed_event, send_via: ["nonexistent_relay"])
-
-      assert message =~ "not connected"
     end
   end
 
@@ -98,8 +93,7 @@ defmodule NostrEx.ClientTest do
     test "returns error for non-existent subscription" do
       fake_sub_id = "nonexistent_sub_id_12345"
 
-      assert {:error, [{:not_found, message}]} = Client.close_sub(fake_sub_id)
-      assert message =~ "subscription ID not found"
+      assert {:error, :sub_not_found, []} = Client.close_sub(fake_sub_id)
     end
   end
 
@@ -111,7 +105,7 @@ defmodule NostrEx.ClientTest do
         created_at: DateTime.utc_now()
       }
 
-      assert {:error, "no relays connected"} = Client.send_sub(sub)
+      assert {:error, :no_relays, []} = Client.send_sub(sub)
     end
   end
 

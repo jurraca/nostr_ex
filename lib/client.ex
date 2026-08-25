@@ -9,14 +9,25 @@ defmodule NostrEx.Client do
   alias NostrCore.{Event, Message}
   alias NostrEx.{RelayAgent, RelayManager, Socket, Utils}
 
+  @type failure :: {relay :: String.t() | term(), reason :: term()}
+
   @type send_result ::
-          {:ok, event_id :: binary(), Keyword.t()}
-          | {:error, String.t(), Keyword.t()}
+          {:ok, event_id :: binary(), [failure()]}
+          | {:error, :no_relays | :unsigned_event | term(), [failure()]}
 
   # === Event Publishing ===
 
   @doc """
   Send a signed event as an `%Event{}` struct.
+
+  Fan-out contract shared by all multi-relay operations:
+
+  - `{:ok, value, failures}` - at least one relay accepted the message;
+    `failures` lists per-relay problems as `{relay_or_input, reason}` tuples,
+    including unknown `send_via` names (`{:name, :not_connected}`).
+  - `{:error, reason, failures}` - nothing was delivered. `reason` is
+    `:no_relays` when no relay was targeted at all, or a string describing
+    why every attempted send failed.
 
   ## Options
   - `:send_via` - List of relays to send the event to. Defaults to all connected relays.
@@ -25,41 +36,24 @@ defmodule NostrEx.Client do
   def send_event(event, opts \\ [])
 
   def send_event(%Event{} = event, opts) do
-    relay_names = get_relays(opts[:send_via])
+    {relay_names, bad_inputs} = get_relays(opts[:send_via])
+    payload = serialize(event)
 
-    if relay_names == [] do
-      case opts[:send_via] do
-        nil ->
-          {:error, [{:no_relays, "no relays connected"}]}
+    results =
+      Enum.map(relay_names, fn relay ->
+        case send_to_relay(relay, payload) do
+          :ok -> {:ok, relay}
+          {:error, reason} -> {:error, relay, reason}
+        end
+      end)
 
-        relays ->
-          {:error,
-           [
-             {:invalid_relays,
-              "not connected to: #{inspect(relays)}. Connect with NostrEx.connect/1 first."}
-           ]}
-      end
-    else
-      payload = serialize(event)
-
-      results =
-        relay_names
-        |> Enum.map(fn relay ->
-          case send_to_relay(relay, payload) do
-            :ok -> {:ok, relay}
-            {:error, reason} -> {:error, relay, reason}
-          end
-        end)
-
-      {successes, failures} =
-        Enum.split_with(results, &match?({:ok, _}, &1))
-
-      failure_tuples = Enum.map(failures, fn {:error, relay, reason} -> {relay, reason} end)
-
-      case successes do
-        [] -> {:error, "send failed", failure_tuples}
-        _ -> {:ok, event.id, failure_tuples}
-      end
+    finish_fanout(results, bad_inputs, fn
+      :all_failed -> "send failed"
+      :nothing_targeted -> :no_relays
+    end)
+    |> case do
+      {:ok, _oks, failures} -> {:ok, event.id, failures}
+      {:error, reason, failures} -> {:error, reason, failures}
     end
   end
 
@@ -72,12 +66,12 @@ defmodule NostrEx.Client do
   def sign_and_send_event(%Event{} = event, signer_or_privkey, opts) do
     case sign_event(event, signer_or_privkey) do
       {:ok, signed_event} -> send_event(signed_event, opts)
-      {:error, reason} -> {:error, [{:signing_failed, reason}]}
+      {:error, reason} -> {:error, {:signing_failed, reason}, []}
     end
   end
 
   def sign_and_send_event(_event, _signer_or_privkey, _opts),
-    do: {:error, [{:invalid_event, "must be an %Event{} struct"}]}
+    do: {:error, {:invalid_event, "must be an %Event{} struct"}, []}
 
   @spec send_to_relay(atom(), binary()) :: :ok | {:error, atom() | String.t()}
   defp send_to_relay(relay, payload) when is_binary(payload) do
@@ -94,24 +88,35 @@ defmodule NostrEx.Client do
   messages — call `NostrEx.listen/1` (before sending, to avoid missing early
   events) from the process that should receive them.
 
+  Returns the same fan-out contract as `send_event/2`:
+
+  - `{:ok, sub_id, failures}` when at least one relay accepted the REQ
+  - `{:error, :no_relays, failures}` / `{:error, "subscribe failed", failures}`
+
   ## Options
   - `:send_via` - List of relay names. Defaults to all connected relays.
   """
-  @spec send_sub(NostrEx.Subscription.t(), keyword()) :: {:ok, String.t()} | {:error, String.t()}
+  @spec send_sub(NostrEx.Subscription.t(), keyword()) ::
+          {:ok, String.t(), [failure()]} | {:error, term(), [failure()]}
   def send_sub(%NostrEx.Subscription{id: sub_id, filters: filters}, opts \\ []) do
     message = serialize_subscription(sub_id, filters)
-    relay_names = get_relays(opts[:send_via])
+    {relay_names, bad_inputs} = get_relays(opts[:send_via])
 
-    case relay_names do
-      [] ->
-        {:error, "no relays connected"}
+    results =
+      Enum.map(relay_names, fn relay_name ->
+        case subscribe_to_relay(relay_name, sub_id, message) do
+          :ok -> {:ok, relay_name}
+          {:error, reason} -> {:error, relay_name, reason}
+        end
+      end)
 
-      _ ->
-        Enum.each(relay_names, fn relay_name ->
-          subscribe_to_relay(relay_name, sub_id, message)
-        end)
-
-        {:ok, sub_id}
+    finish_fanout(results, bad_inputs, fn
+      :all_failed -> "subscribe failed"
+      :nothing_targeted -> :no_relays
+    end)
+    |> case do
+      {:ok, _oks, failures} -> {:ok, sub_id, failures}
+      {:error, reason, failures} -> {:error, reason, failures}
     end
   end
 
@@ -124,13 +129,15 @@ defmodule NostrEx.Client do
 
   Sends CLOSE message to all relays that know about this subscription.
 
-  Returns `{:ok, closed_relays, failures}` where failures is a keyword list of
-  `{relay_name, reason}` tuples, or `{:error, "close_failed", failures}` if all failed.
+  Returns the fan-out contract: `{:ok, closed_relays, failures}`,
+  `{:error, "close failed", failures}` when no relay acknowledged, or
+  `{:error, :sub_not_found, []}` for an unknown subscription ID.
   """
-  @spec close_sub(String.t()) :: close_result()
+  @spec close_sub(String.t()) ::
+          {:ok, [String.t()], [failure()]} | {:error, term(), [failure()]}
   def close_sub(sub_id) when is_binary(sub_id) do
     if sub_id not in RelayAgent.get_unique_subscriptions() do
-      {:error, [{:not_found, "subscription ID not found: #{sub_id}"}]}
+      {:error, :sub_not_found, []}
     else
       relays = RelayAgent.get_relays_for_sub(sub_id)
       request = Message.close(sub_id) |> Message.serialize()
@@ -147,14 +154,13 @@ defmodule NostrEx.Client do
           end
         end)
 
-      {successes, failures} = Enum.split_with(results, &match?({:ok, _}, &1))
-
-      closed_relays = Enum.map(successes, fn {:ok, relay} -> relay end)
-      failure_tuples = Enum.map(failures, fn {:error, relay, reason} -> {relay, reason} end)
-
-      case successes do
-        [] -> {:error, "close failed", failure_tuples}
-        _ -> {:ok, closed_relays, failure_tuples}
+      finish_fanout(results, [], fn
+        :all_failed -> "close failed"
+        :nothing_targeted -> "close failed"
+      end)
+      |> case do
+        {:ok, oks, failures} -> {:ok, Enum.map(oks, fn {:ok, r} -> r end), failures}
+        {:error, reason, failures} -> {:error, reason, failures}
       end
     end
   end
@@ -239,43 +245,62 @@ defmodule NostrEx.Client do
     |> Message.serialize()
   end
 
-  @spec get_relays(nil | :all | String.t() | [String.t()]) :: [String.t()]
-  defp get_relays(nil), do: get_relays(:all)
-  defp get_relays(:all), do: RelayManager.registered_names()
+  # Shared tail of every fan-out operation: merges per-relay failures with
+  # rejected inputs and decides between {:ok, oks, failures} and
+  # {:error, reason, failures}.
+  @spec finish_fanout([{:ok, String.t()} | {:error, String.t(), term()}], [failure()], fun()) ::
+          {:ok, [{:ok, String.t()}], [failure()]} | {:error, term(), [failure()]}
+  defp finish_fanout(results, bad_inputs, reason_for) do
+    {oks, relay_failures} = Enum.split_with(results, &match?({:ok, _}, &1))
 
-  defp get_relays([_h | _t] = relay_list) do
-    {oks, _errors} =
-      relay_list
-      |> Enum.map(&normalize(&1))
-      |> Enum.split_with(&is_binary(&1))
+    failures =
+      Enum.map(relay_failures, fn {:error, relay, reason} -> {relay, reason} end) ++ bad_inputs
 
-    oks
-  end
-
-  defp get_relays(relay) when is_binary(relay), do: get_relays([relay])
-  defp get_relays(_relay_list), do: []
-
-  defp normalize(relay) when is_binary(relay) do
-    # Try as-is first (already a registered name)
-    if relay in RelayManager.registered_names() do
-      relay
-    else
-      # Try parsing as URL and extracting host
-      host = relay |> URI.parse() |> Map.get(:host)
-
-      if host do
-        name = Utils.name_from_host(host)
-
-        if name in RelayManager.registered_names() do
-          name
-        else
-          {:error, "relay not connected or invalid, got #{relay}"}
-        end
-      else
-        {:error, "relay not connected or invalid, got #{relay}"}
-      end
+    cond do
+      oks != [] -> {:ok, oks, failures}
+      results == [] and bad_inputs != [] -> {:error, :no_relays, failures}
+      results == [] -> {:error, reason_for.(:nothing_targeted), []}
+      true -> {:error, reason_for.(:all_failed), failures}
     end
   end
 
-  defp normalize(relay), do: {:error, "invalid relay name, got #{inspect(relay)}"}
+  @spec get_relays(nil | :all | String.t() | [String.t()]) :: {[String.t()], [failure()]}
+  defp get_relays(nil), do: get_relays(:all)
+  defp get_relays(:all), do: {RelayManager.registered_names(), []}
+
+  # Unknown or disconnected entries are returned as rejected inputs instead
+  # of being silently dropped.
+  defp get_relays(input) do
+    input
+    |> List.wrap()
+    |> Enum.reduce({[], []}, fn relay, {names, bad} ->
+      case normalize(relay) do
+        {:ok, name} -> {[name | names], bad}
+        {:error, _reason} -> {names, [{relay, :not_connected} | bad]}
+      end
+    end)
+    |> then(fn {names, bad} -> {Enum.reverse(names), Enum.reverse(bad)} end)
+  end
+
+  @spec normalize(relay :: term()) :: {:ok, String.t()} | {:error, :not_connected}
+  defp normalize(relay) when is_binary(relay) do
+    registered = RelayManager.registered_names()
+
+    cond do
+      relay in registered ->
+        {:ok, relay}
+
+      true ->
+        host = relay |> URI.parse() |> Map.get(:host)
+
+        if host do
+          name = Utils.name_from_host(host)
+          if name in registered, do: {:ok, name}, else: {:error, :not_connected}
+        else
+          {:error, :not_connected}
+        end
+    end
+  end
+
+  defp normalize(relay), do: {:error, :not_connected}
 end

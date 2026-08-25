@@ -126,9 +126,7 @@ defmodule NostrEx.IntegrationTest do
         assert {:error, :not_found} = NostrEx.RelayManager.lookup(name)
       end)
 
-      # All relays have been cleaned up, so the event goes nowhere.
-      # (Error shape is normalized by the error-contract alignment pass.)
-      assert {:error, _} = NostrEx.send_event(signed)
+      assert {:error, :no_relays, []} = NostrEx.send_event(signed)
     end
 
     test "sending to a killed-and-restarted socket errors without raising", %{relay: relay} do
@@ -168,6 +166,10 @@ defmodule NostrEx.IntegrationTest do
 
       assert {:ok, event_id, []} = NostrEx.send_event(signed, send_via: [live_name])
 
+      # Unknown send_via entries surface as failures instead of vanishing.
+      assert {:ok, _event_id2, [{:totally_bogus_relay, :not_connected}]} =
+               NostrEx.send_event(signed, send_via: [live_name, :totally_bogus_relay])
+
       # Delivery is async; poll until the relay records the EVENT frame.
       frame =
         FakeRelay.wait_for(live, fn msgs ->
@@ -191,7 +193,7 @@ defmodule NostrEx.IntegrationTest do
       {:ok, sub} = NostrEx.create_sub(kinds: [999_001], limit: 1)
       :ok = NostrEx.listen(sub)
 
-      {:ok, _sub_id} = NostrEx.send_sub(sub, send_via: [name])
+      {:ok, _sub_id, _failures} = NostrEx.send_sub(sub, send_via: [name])
 
       # Record-before-send invariant: the entry exists as soon as the REQ
       # has been written.
@@ -228,7 +230,7 @@ defmodule NostrEx.IntegrationTest do
         assert {:error, :not_found} = NostrEx.RelayManager.lookup(name)
       end)
 
-      assert {:error, "no relays connected"} = NostrEx.send_sub(sub)
+      assert {:error, :no_relays, []} = NostrEx.send_sub(sub)
       assert NostrEx.list_subs() == []
     end
   end

@@ -162,9 +162,11 @@ defmodule NostrEx do
 
   The event must be signed before sending to prove the sender sent the message.
 
-  Returns `{:ok, event_id, errors}` or `{:error, reason, errors}`, since the event may be sent
-  to multiple relays, and some sends may fail. `errors` is a list of errors in both returns.
-  If it is an empty list `[]`, all sends succeeded.
+  Returns the fan-out contract (see `NostrEx.Client`): `{:ok, event_id, failures}`
+  when at least one relay accepted the event, or `{:error, reason, failures}`
+  when nothing was delivered. `failures` lists per-relay problems as
+  `{relay_or_input, reason}` tuples, including unknown `send_via` names;
+  it is `[]` only when every send succeeded.
 
   ## Options
   - `:send_via` - List of relay names or URLs. Defaults to all connected relays.
@@ -177,12 +179,12 @@ defmodule NostrEx do
       {:ok, "event_id_abc123...", []}
 
       iex> NostrEx.send_event(signed, send_via: ["relay_damus_io"])
-      {:ok, "event_id_abc123..."}
+      {:ok, "event_id_abc123...", []}
   """
   @spec send_event(Event.t(), keyword()) ::
-          {:ok, event_id(), Keyword.t()} | {:error, String.t() | atom(), Keyword.t()}
+          {:ok, event_id(), [Keyword.t()]} | {:error, term(), [Keyword.t()]}
   def send_event(event, opts \\ [])
-  def send_event(%Event{sig: nil}, _opts), do: {:error, "event must be signed before sending"}
+  def send_event(%Event{sig: nil}, _opts), do: {:error, :unsigned_event, []}
   def send_event(%Event{} = event, opts), do: Client.send_event(event, opts)
 
   # Subscriptions
@@ -216,6 +218,9 @@ defmodule NostrEx do
   (before sending) to receive events, or use `subscribe/2` when the caller
   is also the consumer.
 
+  Returns the fan-out contract (see `NostrEx.Client`): `{:ok, sub_id, failures}`
+  when at least one relay accepted the REQ, else `{:error, reason, failures}`.
+
   ## Options
   - `:send_via` - List of relay names or URLs. Defaults to all connected relays.
 
@@ -224,12 +229,13 @@ defmodule NostrEx do
       iex> {:ok, sub} = NostrEx.create_sub(authors: [pubkey], kinds: [1])
       iex> :ok = NostrEx.listen(sub)
       iex> NostrEx.send_sub(sub)
-      {:ok, "123zyx..."}
+      {:ok, "123zyx...", []}
 
       iex> NostrEx.send_sub(sub, send_via: ["relay.damus.io"])
-      {:ok, "123zyx..."}
+      {:ok, "123zyx...", []}
   """
-  @spec send_sub(Subscription.t(), keyword()) :: {:ok, String.t()} | {:error, String.t()}
+  @spec send_sub(Subscription.t(), keyword()) ::
+          {:ok, sub_id(), [Keyword.t()]} | {:error, term(), [Keyword.t()]}
   def send_sub(%Subscription{} = sub, opts \\ []), do: Client.send_sub(sub, opts)
 
   @doc """
@@ -256,7 +262,7 @@ defmodule NostrEx do
   def subscribe(filters, opts \\ []) do
     with {:ok, sub} <- create_sub(filters),
          :ok <- listen(sub),
-         {:ok, _sub_id} <- send_sub(sub, opts) do
+         {:ok, _sub_id, _failures} <- send_sub(sub, opts) do
       {:ok, sub}
     end
   end
