@@ -216,11 +216,15 @@ defmodule NostrEx.Client do
   end
 
   @fanout_concurrency 16
+  @fanout_timeout 15_000
 
   # Runs `fun` against every relay concurrently (input order preserved) and
   # folds the outcomes plus any rejected inputs into the shared fan-out
-  # contract. `fun` returns :ok or {:error, reason} per relay; timeouts
-  # belong to the inner GenServer.call - tasks never time out.
+  # contract. `fun` returns :ok or {:error, reason} per relay.
+  #
+  # Functional timeouts belong to the inner GenServer.call
+  # (Socket.send_message, 5s); @fanout_timeout is only a hang-guard ceiling
+  # for the tasks and must stay above it.
   #
   # - {:ok, success_value.(delivered_relays), failures}
   # - {:error, :no_relays | fail_reason, failures}
@@ -231,8 +235,9 @@ defmodule NostrEx.Client do
       targets
       |> Task.async_stream(&run_one(&1, fun),
         max_concurrency: @fanout_concurrency,
-        timeout: :infinity
+        timeout: @fanout_timeout
       )
+      |> Enum.zip(targets)
       |> Enum.map(&unwrap/1)
 
     failures =
@@ -263,10 +268,11 @@ defmodule NostrEx.Client do
     {relay, outcome}
   end
 
-  # Tasks never time out; this row is only reachable on an untrappable kill,
-  # where the relay identity is unrecoverable.
-  defp unwrap({:ok, pair}), do: pair
-  defp unwrap({:exit, reason}), do: {nil, {:task_exit, reason}}
+  # async_stream rows are in input order, so the zip pairs every target with
+  # exactly one outcome - including killed tasks, keeping aggregation total.
+  defp unwrap({{:ok, pair}, _relay}), do: pair
+  defp unwrap({{:exit, :timeout}, relay}), do: {relay, :fanout_timeout}
+  defp unwrap({{:exit, reason}, relay}), do: {relay, {:task_exit, reason}}
 
   @spec get_relays(nil | :all | String.t() | [String.t()]) :: {[String.t()], [failure()]}
   defp get_relays(nil), do: get_relays(:all)
