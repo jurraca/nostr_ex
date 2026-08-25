@@ -513,12 +513,17 @@ defmodule NostrEx.Socket do
   end
 
   defp handle_nostr_message({:ok, event_id, success, message}, state) do
-    registry_dispatch(:ok, %{
-      event_id: event_id,
-      success: success,
-      message: message,
-      relay: state.uri.host
-    })
+    info = %{event_id: event_id, success: success, message: message, relay: state.uri.host}
+
+    if success do
+      Logger.debug("OK #{String.slice(event_id, 0, 8)}… from #{state.uri.host}")
+    else
+      Logger.warning("Rejected by #{state.uri.host}: #{message} (#{event_id})")
+    end
+
+    # Selective topic: publishers listen({:ok, event_id}) before sending to
+    # receive their own acks; there is deliberately no global ack broadcast.
+    registry_dispatch({:ok, event_id}, {:publish_ack, event_id, info})
 
     state
   end

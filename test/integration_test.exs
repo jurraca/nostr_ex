@@ -420,6 +420,89 @@ defmodule NostrEx.IntegrationTest do
     defp status(pid), do: NostrEx.Socket.get_status(pid)
   end
 
+  describe "publish acknowledgements" do
+    test "publisher receives its own OK ack on the selective topic", %{relay: relay} do
+      {:ok, name} = NostrEx.connect(FakeRelay.url(relay))
+
+      privkey = :crypto.strong_rand_bytes(32) |> Base.encode16(case: :lower)
+      {:ok, event} = NostrEx.create_event(1, content: "ack me")
+      {:ok, signed} = NostrEx.sign_event(event, privkey)
+
+      :ok = NostrEx.listen({:ok, signed.id})
+      assert {:ok, event_id, []} = NostrEx.send_event(signed)
+
+      assert_receive {:publish_ack, ^event_id, %{success: true, message: "", relay: ^name}},
+                     5_000
+    end
+
+    test "acks are isolated per event id" do
+      {:ok, relay} = FakeRelay.start_link()
+      {:ok, _name} = NostrEx.connect(FakeRelay.url(relay))
+
+      privkey = :crypto.strong_rand_bytes(32) |> Base.encode16(case: :lower)
+
+      {:ok, e1} = NostrEx.create_event(1, content: "one")
+      {:ok, s1} = NostrEx.sign_event(e1, privkey)
+      {:ok, e2} = NostrEx.create_event(1, content: "two")
+      {:ok, s2} = NostrEx.sign_event(e2, privkey)
+
+      # Listening to s1 only: s2's ack must never land on this topic.
+      :ok = NostrEx.listen({:ok, s1.id})
+
+      {:ok, _, []} = NostrEx.send_event(s1)
+      {:ok, _, []} = NostrEx.send_event(s2)
+
+      event_id = s1.id
+      assert_receive {:publish_ack, ^event_id, _}, 5_000
+      refute_receive {:publish_ack, _, _}, 200
+    end
+
+    test "rejections surface with success: false and the relay message", %{relay: relay} do
+      {:ok, _name} = NostrEx.connect(FakeRelay.url(relay))
+
+      privkey = :crypto.strong_rand_bytes(32) |> Base.encode16(case: :lower)
+      {:ok, event} = NostrEx.create_event(1, content: "will be rejected")
+      {:ok, signed} = NostrEx.sign_event(event, privkey)
+
+      :ok = NostrEx.listen({:ok, signed.id})
+      {:ok, event_id, []} = NostrEx.send_event(signed)
+
+      FakeRelay.push_ok(relay, signed.id, false, "invalid: too dumb")
+
+      assert_receive {:publish_ack, ^event_id, %{success: false, message: "invalid: too dumb"}},
+                     5_000
+    end
+
+    test "each relay answers on the same topic in multi-relay publishes" do
+      {:ok, ra} = FakeRelay.start_link()
+      {:ok, rb} = FakeRelay.start_link(ip: {127, 0, 0, 2})
+
+      {:ok, na} = NostrEx.connect(FakeRelay.url(ra))
+      {:ok, nb} = NostrEx.connect(FakeRelay.url(rb))
+
+      privkey = :crypto.strong_rand_bytes(32) |> Base.encode16(case: :lower)
+      {:ok, event} = NostrEx.create_event(1, content: "fanout acks")
+      {:ok, signed} = NostrEx.sign_event(event, privkey)
+
+      :ok = NostrEx.listen({:ok, signed.id})
+      {:ok, event_id, []} = NostrEx.send_event(signed)
+
+      acks =
+        for _ <- 1..2 do
+          assert_receive {:publish_ack, ^event_id, info}, 5_000
+          info
+        end
+
+      relays = Enum.map(acks, & &1.relay) |> Enum.sort()
+      assert relays == Enum.sort([na, nb])
+      assert Enum.all?(acks, & &1.success)
+    end
+
+    test "the global :ok topic is gone" do
+      assert_raise FunctionClauseError, fn -> NostrEx.listen(:ok) end
+    end
+  end
+
   defp eventually(fun, timeout \\ 5_000) do
     deadline = System.monotonic_time(:millisecond) + timeout
     do_eventually(fun, deadline)

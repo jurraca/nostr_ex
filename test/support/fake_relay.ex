@@ -22,7 +22,15 @@ defmodule NostrEx.TestSupport.FakeRelay do
 
   @test_privkey "6dba065ffb6f51b4023d7d24a0c91c125c42ceff344d744d00f3c76e6cb5e03e"
 
-  defstruct [:ref, :port, :ip_string, handlers: %{}, received: [], conn_count: 0, reject_until: nil]
+  defstruct [
+    :ref,
+    :port,
+    :ip_string,
+    handlers: %{},
+    received: [],
+    conn_count: 0,
+    reject_until: nil
+  ]
 
   ## Public API
 
@@ -196,6 +204,14 @@ defmodule NostrEx.TestSupport.FakeRelay do
   def handle_cast({:frame_in, text}, state),
     do: {:noreply, %{state | received: [text | state.received]}}
 
+  # Auto-generated OK for a received EVENT (real-relay behavior).
+  def handle_cast({:auto_ok, event_id}, state) do
+    frame = Message.serialize({:ok, event_id, true, ""})
+    for {_ref, pid} <- state.handlers, do: send(pid, {:relay_send, {:text, frame}})
+
+    {:noreply, state}
+  end
+
   def handle_cast(:clear_received, state), do: {:noreply, %{state | received: []}}
 
   def handle_cast({:reject_window, ms}, state),
@@ -270,10 +286,22 @@ defmodule NostrEx.TestSupport.FakeRelay.Handler do
   @impl true
   def websocket_handle({:text, text}, %{relay: relay} = state) do
     GenServer.cast(relay, {:frame_in, text})
+    maybe_auto_ack(relay, text)
     {:ok, state}
   end
 
   def websocket_handle(_frame, state), do: {:ok, state}
+
+  # Behave like a real relay: every accepted EVENT gets an OK reply.
+  defp maybe_auto_ack(relay, text) do
+    case JSON.decode(text) do
+      {:ok, ["EVENT", %{"id" => event_id}]} ->
+        GenServer.cast(relay, {:auto_ok, event_id})
+
+      _ ->
+        :ok
+    end
+  end
 
   @impl true
   def websocket_info({:relay_send, frame}, state), do: {[frame], state}

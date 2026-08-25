@@ -136,6 +136,28 @@ If not specified, all currently connected relays will be used.
 
 Additionally, since most send operations usually happen towards multiple relays, the response is a tuple of the form `{:ok, value, error_list}` to send back partial failures where at least one send succeeded but others may not have.
 
+### Publish Acknowledgements
+
+Relays answer publishes with `OK` messages. To receive yours, listen on the
+event's topic **before** sending (fast relays acknowledge within milliseconds):
+
+```elixir
+NostrEx.listen({:ok, signed.id})
+{:ok, _event_id, _errors} = NostrEx.send_event(signed)
+
+receive do
+  {:publish_ack, ^signed.id, %{success: true, relay: relay}} ->
+    IO.puts("accepted by #{relay}")
+
+  {:publish_ack, ^signed.id, %{success: false, message: reason}} ->
+    IO.puts("rejected: #{reason}")
+end
+```
+
+Each targeted relay answers once. There is no global ack topic — match on
+the event ids you care about, and unregister when done with
+`Registry.unregister(NostrEx.PubSub, {:ok, event_id})`.
+
 ### NIP-05 Verification
 
 ```elixir

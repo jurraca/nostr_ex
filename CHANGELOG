@@ -35,3 +35,10 @@ Unreleased changes:
     `{input, :not_connected}` instead of being silently dropped.
   - Dead-relay sends return `{:error, :relay_down}` / `{:error,
     :send_timeout}` rather than crashing the caller.
+- **BREAKING: publish acknowledgements are no longer broadcast globally.**
+  The old global `:ok` topic is gone (`NostrEx.listen(:ok)` raises).
+  Listen on the per-event topic instead - `NostrEx.listen({:ok, event_id})`
+  before sending - and receive one
+  `{:publish_ack, event_id, %{event_id:, success:, message:, relay:}}`
+  message per targeted relay. Relay rejections are additionally logged at
+  warning level.

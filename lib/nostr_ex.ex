@@ -308,8 +308,18 @@ defmodule NostrEx do
   - `{:eose, sub_id, relay_host}` - End of stored events from a relay
   - `{:close, sub_id, relay_host}` - The relay closed the subscription
 
-  The special topic `:ok` receives relay `OK` acknowledgements for published
-  events as `%{event_id: ..., success: ..., message: ..., relay: ...}` maps.
+  ## Publish acknowledgements
+
+  Passing `{:ok, event_id}` subscribes this process to that event's publish
+  acknowledgements, delivered as:
+
+  - `{:publish_ack, event_id, info}` where `info` is
+    `%{event_id: ..., success: ..., message: ..., relay: ...}` — one message
+    per relay the event was sent to.
+
+  Call it BEFORE `send_event/2`: fast relays acknowledge within milliseconds.
+  There is deliberately no global ack topic; match on the event ids you care
+  about. Unregister with `Registry.unregister(NostrEx.PubSub, {:ok, event_id})`.
 
   The special topic `:relay_events` receives connection lifecycle notices:
   `{:relay_up, name}`, `{:relay_down, name, reason}` and
@@ -323,10 +333,20 @@ defmodule NostrEx do
       iex> {:ok, sub} = NostrEx.create_sub(kinds: [1])
       iex> :ok = NostrEx.listen(sub)
       iex> {:ok, _sub_id} = NostrEx.send_sub(sub)
+
+      iex> :ok = NostrEx.listen({:ok, signed.id})
+      iex> {:ok, ^signed.id, _} = NostrEx.send_event(signed)
+      iex> receive do {:publish_ack, id, %{success: true}} -> :published end
   """
-  @spec listen(Subscription.t() | sub_id() | :ok | :auth | :relay_events) :: :ok
+  @spec listen(
+          Subscription.t()
+          | sub_id()
+          | {:ok, event_id()}
+          | :auth
+          | :relay_events
+        ) :: :ok
   def listen(%Subscription{id: sub_id}), do: do_listen(sub_id)
-  def listen(:ok), do: do_listen(:ok)
+  def listen({:ok, event_id} = topic) when is_binary(event_id), do: do_listen(topic)
   def listen(:auth), do: do_listen(:auth)
   def listen(:relay_events), do: do_listen(:relay_events)
   def listen(sub_id) when is_binary(sub_id), do: do_listen(sub_id)
