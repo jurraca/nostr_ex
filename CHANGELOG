@@ -35,6 +35,10 @@ Unreleased changes:
     `{input, :not_connected}` instead of being silently dropped.
   - Dead-relay sends return `{:error, :relay_down}` / `{:error,
     :send_timeout}` rather than crashing the caller.
+- **Embeddable supervision tree.** `NostrEx.Supervisor` exposes the tree as
+  a child spec; `config :nostr_ex, autostart: false` disables automatic
+  startup, and `tree_opts` (e.g. `[partitions: 4, max_restarts: 10]`) tunes
+  it at boot.
 - **BREAKING: publish acknowledgements are no longer broadcast globally.**
   The old global `:ok` topic is gone (`NostrEx.listen(:ok)` raises).
   Listen on the per-event topic instead - `NostrEx.listen({:ok, event_id})`

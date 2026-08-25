@@ -247,6 +247,10 @@ defmodule NostrEx.Socket do
   def handle_info(:attempt, %{lifecycle: :backoff} = state), do: attempt_connection(state)
   def handle_info(:attempt, state), do: {:noreply, state}
 
+  # Late transport noise for an already-torn-down connection (e.g.
+  # tcp_error racing connection_lost): nothing to stream through.
+  def handle_info(_message, %{conn: nil} = state), do: {:noreply, state}
+
   def handle_info({tag, _socket}, state) when tag in [:tcp_closed, :ssl_closed] do
     Logger.debug("Transport closed by remote #{state.uri.host}.")
     connection_lost("closed by remote", state)

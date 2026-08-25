@@ -165,6 +165,29 @@ the event ids you care about, and unregister when done with
 NostrEx.Nip05.verify("user@example.com")
 ```
 
+## Configuration
+
+By default nostr_ex starts its supervision tree automatically with your
+application. The tree can be tuned or embedded in your own:
+
+```elixir
+# config/config.exs — tune the tree
+config :nostr_ex,
+  tree_opts: [partitions: 4, max_restarts: 10]
+
+# or take full control of placement:
+config :nostr_ex, autostart: false
+
+# then embed it anywhere in your supervision tree
+children = [
+  {NostrEx.Supervisor, max_restarts: 10},
+  MyApp.Worker
+]
+```
+
+The tree is a singleton per node (fixed process names), so exactly one
+instance may run at a time.
+
 ## Architecture
 
 NostrEx uses a supervision tree with the following components:
