@@ -22,10 +22,16 @@ defmodule NostrEx.TestSupport.FakeRelay do
 
   @test_privkey "6dba065ffb6f51b4023d7d24a0c91c125c42ceff344d744d00f3c76e6cb5e03e"
 
-  defstruct [:ref, :port, handlers: %{}, received: []]
+  defstruct [:ref, :port, :ip_string, handlers: %{}, received: []]
 
   ## Public API
 
+  @doc """
+  Starts an isolated relay. Opts:
+  - `:ip` - loopback address tuple to bind and report in the URL
+    (default `{127, 0, 0, 1}`). Use e.g. `{127, 0, 0, 2}` to get a second
+    relay with a *distinct hostname* (relay identity is host-based).
+  """
   @spec start_link(keyword()) :: GenServer.on_start()
   def start_link(opts \\ []) do
     GenServer.start_link(__MODULE__, opts)
@@ -33,7 +39,9 @@ defmodule NostrEx.TestSupport.FakeRelay do
 
   @doc "The ws:// URL of this fake relay's ephemeral listener."
   @spec url(pid()) :: String.t()
-  def url(server), do: "ws://127.0.0.1:#{port(server)}"
+  def url(server), do: "ws://#{ip_string(server)}:#{port(server)}"
+
+  defp ip_string(server), do: GenServer.call(server, :ip_string)
 
   @spec port(pid()) :: :inet.port_number()
   def port(server), do: GenServer.call(server, :port)
@@ -69,16 +77,14 @@ defmodule NostrEx.TestSupport.FakeRelay do
     do: broadcast(server, {:relay_send, {:text, text}})
 
   @doc """
-  Kill all TCP connections abruptly, without a websocket close frame.
-  The client sees a transport-level disconnect.
-  """
-  def drop_connections(server) do
-    for {_ref, pid} <- GenServer.call(server, :handlers) do
-      Process.exit(pid, :kill)
-    end
+  Close all server-side TCP connections abruptly (no websocket close frame).
 
-    :ok
-  end
+  NOTE: how quickly the client observes an abrupt drop is not deterministic
+  — idle connections may not notice for seconds. Tests that assert on
+  post-drop client state should use `close_gracefully/1` instead, or rely on
+  keepalives once implemented.
+  """
+  def drop_connections(server), do: GenServer.cast(server, :force_drop)
 
   @doc "Send a proper websocket close frame, letting Cowboy finish the handshake."
   def close_gracefully(server), do: broadcast(server, {:relay_send, {:close, 1000, ""}})
@@ -118,7 +124,8 @@ defmodule NostrEx.TestSupport.FakeRelay do
   ## Server callbacks
 
   @impl GenServer
-  def init(_opts) do
+  def init(opts) do
+    ip = Keyword.get(opts, :ip, {127, 0, 0, 1})
     ref = make_ref()
 
     routes =
@@ -126,11 +133,16 @@ defmodule NostrEx.TestSupport.FakeRelay do
         {:_, [{"/[...]", NostrEx.TestSupport.FakeRelay.Handler, %{relay: self()}}]}
       ])
 
-    case :cowboy.start_clear(ref, [ip: {127, 0, 0, 1}, port: 0], %{
+    case :cowboy.start_clear(ref, [ip: ip, port: 0], %{
            env: %{dispatch: routes}
          }) do
       {:ok, _pid} ->
-        {:ok, %__MODULE__{ref: ref, port: :ranch.get_port(ref)}}
+        {:ok,
+         %__MODULE__{
+           ref: ref,
+           port: :ranch.get_port(ref),
+           ip_string: ip |> :inet.ntoa() |> List.to_string()
+         }}
 
       {:error, reason} ->
         {:stop, reason}
@@ -139,6 +151,8 @@ defmodule NostrEx.TestSupport.FakeRelay do
 
   @impl GenServer
   def handle_call(:port, _from, state), do: {:reply, state.port, state}
+
+  def handle_call(:ip_string, _from, state), do: {:reply, state.ip_string, state}
 
   def handle_call(:handlers, _from, state), do: {:reply, Map.values(state.handlers), state}
 
@@ -157,6 +171,26 @@ defmodule NostrEx.TestSupport.FakeRelay do
 
   def handle_cast({:broadcast, msg}, state) do
     for {_ref, pid} <- state.handlers, do: send(pid, msg)
+    {:noreply, state}
+  end
+
+  def handle_cast(:force_drop, state) do
+    # Close the TCP ports directly rather than killing the handler
+    # processes: port_close produces an immediate FIN, while killing
+    # leaves socket teardown to supervisor cleanup timing.
+    for {_ref, pid} <- state.handlers do
+      case :erlang.process_info(pid, :links) do
+        {:links, links} ->
+          Enum.each(links, fn
+            port when is_port(port) -> :erlang.port_close(port)
+            _pid -> :ok
+          end)
+
+        _ ->
+          :ok
+      end
+    end
+
     {:noreply, state}
   end
 

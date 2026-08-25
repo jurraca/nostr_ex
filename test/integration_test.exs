@@ -100,7 +100,86 @@ defmodule NostrEx.IntegrationTest do
     end
   end
 
-  defp eventually(fun, timeout \\ 2_000) do
+  describe "sending to dead relays" do
+    test "send_message to unknown relay returns error instead of raising" do
+      assert {:error, :relay_down} = NostrEx.Socket.send_message("never_connected_relay", "x")
+    end
+
+    test "send_event after relay close returns errors, caller survives", %{relay: relay} do
+      {:ok, name} = NostrEx.connect(FakeRelay.url(relay))
+
+      privkey = :crypto.strong_rand_bytes(32) |> Base.encode16(case: :lower)
+      {:ok, event} = NostrEx.create_event(1, content: "doomed")
+      {:ok, signed} = NostrEx.sign_event(event, privkey)
+
+      # Graceful websocket close: handled frame-by-frame by the socket
+      # process itself, so teardown is deterministic (unlike abrupt
+      # transport drops, whose client-visible timing is not).
+      FakeRelay.close_gracefully(relay)
+
+      eventually(fn ->
+        assert {:error, :not_found} = NostrEx.RelayManager.lookup(name)
+      end)
+
+      # All relays have been cleaned up, so the event goes nowhere.
+      # (Error shape is normalized by the error-contract alignment pass.)
+      assert {:error, _} = NostrEx.send_event(signed)
+    end
+
+    test "sending to a killed-and-restarted socket errors without raising", %{relay: relay} do
+      {:ok, name} = NostrEx.connect(FakeRelay.url(relay))
+      {:ok, pid} = NostrEx.RelayManager.lookup(name)
+
+      # Abnormal exit: transient restarts a blank socket under the same name.
+      Process.exit(pid, :kill)
+
+      eventually(fn ->
+        assert {:ok, _new_pid} = NostrEx.RelayManager.lookup(name)
+      end)
+
+      assert match?({:error, _}, NostrEx.Socket.send_message(name, "[]"))
+    end
+
+    test "send_event targets only connected relays" do
+      # Distinct loopback IPs: relay identity is hostname-based, so two
+      # relays on 127.0.0.1 would collapse into a single connection.
+      {:ok, live} = FakeRelay.start_link()
+      {:ok, dead} = FakeRelay.start_link(ip: {127, 0, 0, 2})
+
+      {:ok, live_name} = NostrEx.connect(FakeRelay.url(live))
+      {:ok, dead_name} = NostrEx.connect(FakeRelay.url(dead))
+
+      privkey = :crypto.strong_rand_bytes(32) |> Base.encode16(case: :lower)
+      {:ok, event} = NostrEx.create_event(1, content: "fanout")
+      {:ok, signed} = NostrEx.sign_event(event, privkey)
+
+      # Synchronous disconnect: terminate_child returns after the child is
+      # gone, so no transport-timing is involved.
+      :ok = NostrEx.disconnect(dead_name)
+
+      eventually(fn ->
+        assert {:error, :not_found} = NostrEx.RelayManager.lookup(dead_name)
+      end)
+
+      assert {:ok, event_id, []} = NostrEx.send_event(signed, send_via: [live_name])
+
+      # Delivery is async; poll until the relay records the EVENT frame.
+      frame =
+        FakeRelay.wait_for(live, fn msgs ->
+          Enum.find(msgs, &String.contains?(&1, ~s("EVENT")))
+        end)
+
+      assert is_binary(frame)
+
+      assert ["EVENT", %{"id" => ^event_id}] = JSON.decode!(frame)
+      assert match?({:error, _}, NostrEx.Socket.send_message(dead_name, "[]"))
+    end
+  end
+
+  # Generous default: passing polls exit early; only genuine failures pay
+  # the full budget. Tolerates occasional multi-second delivery jitter on
+  # otherwise-idle loopback connections.
+  defp eventually(fun, timeout \\ 5_000) do
     deadline = System.monotonic_time(:millisecond) + timeout
     do_eventually(fun, deadline)
   end

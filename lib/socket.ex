@@ -82,19 +82,34 @@ defmodule NostrEx.Socket do
 
   @doc """
   Send a serialized message to the relay via the connection at this relay name or `pid`.
+
+  If the relay process is no longer running (or dies mid-send), returns
+  `{:error, :relay_down}` rather than raising.
   """
   @spec send_message(pid() | String.t(), binary()) :: :ok | {:error, atom() | String.t()}
   def send_message(relay_name, text) when is_binary(relay_name) and is_binary(text) do
-    via_tuple(relay_name) |> GenServer.call({:send_text, text}, @default_call_timeout)
+    safe_send_call(via_tuple(relay_name), text)
   end
 
   def send_message(pid, text) when is_pid(pid) and is_binary(text) do
-    GenServer.call(pid, {:send_text, text}, @default_call_timeout)
+    safe_send_call(pid, text)
   end
 
   def send_message(relay_name, _text) do
     {:error,
      "invalid relay_name format, expected a registered string or a pid, got: #{inspect(relay_name)}"}
+  end
+
+  defp safe_send_call(server, text) do
+    GenServer.call(server, {:send_text, text}, @default_call_timeout)
+  catch
+    # A timed-out call leaves the send outcome unknown; report it as such.
+    :exit, {:timeout, _} ->
+      {:error, :send_timeout}
+
+    # The socket process was gone before or during the call.
+    :exit, _ ->
+      {:error, :relay_down}
   end
 
   @doc """
@@ -394,9 +409,11 @@ defmodule NostrEx.Socket do
   defp handle_nostr_message({:notice, message}, state) do
     Logger.debug("NOTICE from #{state.uri.host}: #{message}")
     sub_ids = RelayAgent.get(state.name) || []
+
     for sub_id <- sub_ids do
       registry_dispatch(sub_id, {:notice, sub_id, state.uri.host, message})
     end
+
     state
   end
 

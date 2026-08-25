@@ -124,8 +124,15 @@ defmodule NostrEx.RelayManager do
   @spec ready?(String.t()) :: boolean() | {:error, :not_found | String.t()}
   def ready?(relay_name) when is_binary(relay_name) do
     case lookup(relay_name) do
-      {:ok, pid} -> Socket.get_status(pid) |> Map.get(:ready?)
-      err -> err
+      {:ok, pid} ->
+        case safe_status(pid) do
+          {:ok, status} -> Map.get(status, :ready?)
+          # Registry entries can outlive their process by an instant.
+          :down -> false
+        end
+
+      err ->
+        err
     end
   end
 
@@ -161,7 +168,15 @@ defmodule NostrEx.RelayManager do
           %{url: String.t(), name: String.t(), ready?: boolean(), closing?: boolean()}
         ]
   def get_states() do
-    active_pids() |> Enum.map(fn pid -> Socket.get_status(pid) end)
+    # Sockets may terminate concurrently with this enumeration; drop any
+    # that vanish between snapshotting children and querying them.
+    active_pids()
+    |> Enum.flat_map(fn pid ->
+      case safe_status(pid) do
+        {:ok, status} -> [status]
+        :down -> []
+      end
+    end)
   end
 
   @spec registered_names() :: [String.t()]
@@ -175,6 +190,13 @@ defmodule NostrEx.RelayManager do
       [{pid, _}] -> {:ok, pid}
       _ -> {:error, :not_found}
     end
+  end
+
+  @spec safe_status(pid()) :: {:ok, map()} | :down
+  defp safe_status(pid) do
+    {:ok, Socket.get_status(pid)}
+  catch
+    :exit, _ -> :down
   end
 
   @spec parse_url(String.t()) :: {:ok, URI.t()} | {:error, String.t()}

@@ -7,6 +7,7 @@
     hex
     gnumake
     autoreconfHook
+    nostr-rs-relay
   ];
 in
   pkgs.mkShell {
