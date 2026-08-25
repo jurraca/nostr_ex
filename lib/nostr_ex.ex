@@ -48,6 +48,16 @@ defmodule NostrEx do
   @doc """
   Connect to a relay.
 
+  The socket keeps retrying with exponential backoff if the relay is
+  unreachable or drops later; this call only waits for the *first*
+  handshake. Lifecycle transitions are published on the `:relay_events`
+  topic (see `listen/1`).
+
+  ## Options
+  - `:readiness_timeout` - ms to wait for the first handshake (default 5000)
+  - `:backoff_min` / `:backoff_max` - reconnect delay bounds in ms (default 500/30000)
+  - `:max_attempts` - reconnect attempts before giving up (default `:infinity`)
+
   ## Examples
 
       iex> NostrEx.connect("wss://relay.damus.io")
@@ -56,8 +66,9 @@ defmodule NostrEx do
       iex> NostrEx.connect("invalid")
       {:error, "Invalid URL"}
   """
-  @spec connect(binary()) :: {:ok, relay_name()} | {:error, String.t()}
-  def connect(relay_url) when is_binary(relay_url), do: RelayManager.connect(relay_url)
+  @spec connect(binary(), keyword()) :: {:ok, relay_name()} | {:error, String.t()}
+  def connect(relay_url, opts \\ []) when is_binary(relay_url),
+    do: RelayManager.connect(relay_url, opts)
 
   @doc """
   Disconnect from a relay.
@@ -300,6 +311,10 @@ defmodule NostrEx do
   The special topic `:ok` receives relay `OK` acknowledgements for published
   events as `%{event_id: ..., success: ..., message: ..., relay: ...}` maps.
 
+  The special topic `:relay_events` receives connection lifecycle notices:
+  `{:relay_up, name}`, `{:relay_down, name, reason}` and
+  `{:retry_scheduled, name, attempt, delay_ms}`.
+
   Idempotent: registering the same process for the same topic twice does not
   result in duplicate deliveries.
 
@@ -309,10 +324,11 @@ defmodule NostrEx do
       iex> :ok = NostrEx.listen(sub)
       iex> {:ok, _sub_id} = NostrEx.send_sub(sub)
   """
-  @spec listen(Subscription.t() | sub_id() | :ok | :auth) :: :ok
+  @spec listen(Subscription.t() | sub_id() | :ok | :auth | :relay_events) :: :ok
   def listen(%Subscription{id: sub_id}), do: do_listen(sub_id)
   def listen(:ok), do: do_listen(:ok)
   def listen(:auth), do: do_listen(:auth)
+  def listen(:relay_events), do: do_listen(:relay_events)
   def listen(sub_id) when is_binary(sub_id), do: do_listen(sub_id)
 
   defp do_listen(sub_id) do

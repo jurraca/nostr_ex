@@ -151,18 +151,12 @@ defmodule NostrEx.Client do
 
   @spec subscribe_to_relay(atom(), String.t(), binary()) :: :ok | {:error, String.t()}
   defp subscribe_to_relay(relay_name, sub_id, payload) when is_binary(sub_id) do
-    # Record before writing the REQ: a fast relay rejection (CLOSED) must be
-    # able to clean up an entry that already exists, never resurrect one.
+    # Record before writing the REQ. The entry persists even if the write
+    # fails (relay down): subscriptions recorded during an outage are
+    # replayed automatically once the socket reconnects. Only a genuine
+    # relay rejection (CLOSED) removes an entry.
     :ok = RelayAgent.put_subscription(relay_name, sub_id, payload)
-
-    case send_to_relay(relay_name, payload) do
-      :ok ->
-        :ok
-
-      {:error, reason} ->
-        RelayAgent.delete_subscription(relay_name, sub_id)
-        {:error, reason}
-    end
+    send_to_relay(relay_name, payload)
   end
 
   def sign_event(%Event{} = event, privkey) when is_binary(privkey) do

@@ -1,83 +1,73 @@
 defmodule NostrEx.Socket do
   @moduledoc """
-  A GenServer implementing a websocket connection to a relay.
+  A GenServer owning a relay slot: it connects itself, reconnects with
+  exponential backoff on any failure, and replays its recorded
+  subscriptions after each successful handshake.
 
-  Once it is in `ready?: true` state, messages can be sent via `send_message/2`,
-  with arguments either the `pid` or the `name` registered on `init`, and the encoded Nostr message to send.
+  The process represents the relay (its Registry name exists from spawn),
+  not the connection - being alive means trying to be ready. It only ever
+  exits when the supervisor removes it (`RelayManager.disconnect/1`); a
+  crash respawns a fresh socket that immediately starts connecting again.
 
-  There are two other API function for this GenServer: `connect/1` to connect to a relay via the GenServer process started at `pid`,
-  and `get_status/1`, which returns a subset of the state, essentially:
+  Once in `ready?: true` state messages can be sent via `send_message/2`,
+  which returns `{:error, :not_ready}` while connecting or backing off.
+
+  Status is available via `get_status/1`:
   ```
     %{
       url: URI.to_string(state.uri),
       name: state.name,
+      state: :connecting | :ready | :backoff | :failed | :closing,
       closing?: state.closing?,
       ready?: state.ready?
     }
   ```
 
-  The `send_message/2` is a `call`, and will return `:ok` if the socket was in a ready state and successfully sent the message, and an `{:error, reason}` tuple otherwise.
-
-  Before terminating, the process will update the `RelayAgent` to delete subscription info associated with this relay.
+  Lifecycle transitions are announced on the `:relay_events` pubsub topic:
+  `{:relay_up, name}`, `{:relay_down, name, reason}` and
+  `{:retry_scheduled, name, attempt, delay_ms}`.
   """
 
-  use GenServer, restart: :transient
+  use GenServer, restart: :permanent
 
   require Logger
 
-  alias NostrEx.{RelayAgent, RelayRegistry}
+  alias NostrEx.{Backoff, RelayAgent, RelayRegistry}
   alias NostrCore.{Event, Message}
 
-  @default_connect_timeout 3_000
   @default_call_timeout 5_000
+  @default_backoff_min 500
+  @default_backoff_max 30_000
 
   defstruct [
     :uri,
     :conn,
     :websocket,
     :request_ref,
-    :caller,
     :status,
     :resp_headers,
     :name,
+    :lifecycle,
+    :attempt,
+    :retry_timer,
+    :backoff_min,
+    :backoff_max,
+    :max_attempts,
+    :last_error,
     closing?: false,
     ready?: false
   ]
 
   ## Public API
 
-  @spec start_link(%{uri: URI.t(), name: String.t()}) :: GenServer.on_start()
-  def start_link(%{uri: uri, name: name}) do
-    GenServer.start_link(__MODULE__, {uri, name}, name: via_tuple(name))
-  end
-
-  @doc """
-  Connect to a relay.
-  The GenServer process is first started with the relay name on `init/1`, and connected to separately via this function,
-  since it may take an arbitrary amount of time.
-  By default, the timeout is 3 seconds to connect and upgrade the connection to a websocket.
-
-  The connection still needs to complete the handshake to be ready to receive messages,
-  therefore it is recommended to check the socket's `ready?` status via `get_status/1` before sending messages.
-  """
-  @spec connect(pid(), timeout()) :: {:ok, :connected} | {:error, String.t()}
-  def connect(pid, timeout \\ @default_connect_timeout) do
-    try do
-      GenServer.call(pid, :connect, timeout)
-    catch
-      :exit, {:timeout, _} ->
-        {:error, "connection timed out after #{timeout}ms. Is your URL correct?"}
-
-      :exit, {{:shutdown, reason}, _msg} ->
-        {:error, reason}
-
-      :exit, {reason, msg} ->
-        {:error, "Exited with reason #{inspect(reason)}: #{inspect(msg)}"}
-
-      :exit, term ->
-        Logger.error(inspect(term))
-        {:error, "Exited"}
-    end
+  @spec start_link(%{
+          required(:uri) => URI.t(),
+          required(:name) => String.t(),
+          optional(:opts) => keyword()
+        }) ::
+          GenServer.on_start()
+  def start_link(%{uri: uri, name: name} = args) do
+    GenServer.start_link(__MODULE__, {uri, name, Map.get(args, :opts, [])}, name: via_tuple(name))
   end
 
   @doc """
@@ -114,11 +104,12 @@ defmodule NostrEx.Socket do
 
   @doc """
   Get the status of the current connection.
-  Returns the `url`, `name`, `ready?` and `closing?` args from the state.
+  Returns the `url`, `name`, lifecycle `state`, `ready?` and `closing?`.
   """
   @spec get_status(pid()) :: %{
           url: String.t(),
           name: String.t(),
+          state: :connecting | :ready | :backoff | :failed | :closing,
           ready?: boolean(),
           closing?: boolean()
         }
@@ -129,32 +120,91 @@ defmodule NostrEx.Socket do
   ## GenServer Callbacks
 
   @impl GenServer
-  @spec init({URI.t(), String.t()}) :: {:ok, %__MODULE__{}}
-  def init({uri, name}) do
+  def init({uri, name, opts}) do
     Process.flag(:trap_exit, true)
-    {:ok, %__MODULE__{uri: uri, name: name}}
+
+    state = %__MODULE__{
+      uri: uri,
+      name: name,
+      lifecycle: :connecting,
+      attempt: 0,
+      retry_timer: nil,
+      backoff_min: Keyword.get(opts, :backoff_min, @default_backoff_min),
+      backoff_max: Keyword.get(opts, :backoff_max, @default_backoff_max),
+      max_attempts: Keyword.get(opts, :max_attempts, :infinity)
+    }
+
+    {:ok, state, {:continue, :connect}}
   end
 
   @impl GenServer
-  @spec handle_call(:connect, GenServer.from(), %__MODULE__{}) ::
-          {:noreply, %__MODULE__{}}
-          | {:reply, {:error, :already_connected | :already_connecting}, %__MODULE__{}}
-          | {:stop, {:shutdown, String.t()}, %__MODULE__{}}
-  def handle_call(:connect, from, %{conn: nil} = state) do
+  def handle_continue(:connect, state), do: attempt_connection(state)
+
+  defp attempt_connection(state) do
     case establish_connection(state.uri) do
       {:ok, conn, request_ref} ->
-        {:noreply, %{state | conn: conn, request_ref: request_ref, caller: from}}
+        {:noreply, %{state | conn: conn, request_ref: request_ref, lifecycle: :connecting}}
 
       {:error, reason} ->
-        {:stop, {:shutdown, reason}, state}
+        connection_lost(reason, state)
     end
   end
 
-  def handle_call(:connect, _from, %{ready?: true} = state),
-    do: {:reply, {:error, :already_connected}, state}
+  # A connection was lost or could not be established: tear it down and
+  # enter the backoff loop. The process stays alive - only RelayManager
+  # disconnect/1 removes it.
+  defp connection_lost(reason, state) do
+    was_ready? = state.ready?
 
-  def handle_call(:connect, _from, state),
-    do: {:reply, {:error, :already_connecting}, state}
+    state =
+      state
+      |> Map.put(:last_error, reason)
+      |> teardown_connection()
+      |> Map.put(:ready?, false)
+
+    if was_ready? do
+      broadcast(:relay_events, {:relay_down, state.name, reason})
+    end
+
+    schedule_retry(state)
+  end
+
+  defp teardown_connection(%{conn: nil} = state), do: %{state | websocket: nil, request_ref: nil}
+
+  defp teardown_connection(state) do
+    _ = send_frame(state, :close)
+    _ = Mint.HTTP.close(state.conn)
+    %{state | conn: nil, websocket: nil, request_ref: nil}
+  rescue
+    _ -> %{state | conn: nil, websocket: nil, request_ref: nil}
+  end
+
+  defp schedule_retry(%{max_attempts: max} = state) when is_integer(max) do
+    if state.attempt >= max do
+      Logger.error("Relay #{state.uri.host}: giving up after #{state.attempt} attempts")
+      {:noreply, %{state | lifecycle: :failed}}
+    else
+      do_schedule_retry(state)
+    end
+  end
+
+  defp schedule_retry(state), do: do_schedule_retry(state)
+
+  defp do_schedule_retry(state) do
+    attempt = state.attempt + 1
+    delay = Backoff.next_delay(attempt, min: state.backoff_min, max: state.backoff_max)
+
+    Logger.warning(
+      "Relay #{state.uri.host} down (#{state.last_error}); retry #{attempt} in #{delay}ms"
+    )
+
+    broadcast(:relay_events, {:retry_scheduled, state.name, attempt, delay})
+
+    if is_reference(state.retry_timer), do: Process.cancel_timer(state.retry_timer)
+    timer = Process.send_after(self(), :attempt, delay)
+
+    {:noreply, %{state | lifecycle: :backoff, attempt: attempt, retry_timer: timer}}
+  end
 
   @impl GenServer
   @spec handle_call({:send_text, binary()}, GenServer.from(), %__MODULE__{}) ::
@@ -186,15 +236,18 @@ defmodule NostrEx.Socket do
   @impl GenServer
   @spec handle_info(term(), %__MODULE__{}) ::
           {:noreply, %__MODULE__{}} | {:stop, :normal, %__MODULE__{}}
+  # Supervisor shutdown (explicit disconnect terminates the child).
   def handle_info({:EXIT, _pid, reason}, state) do
-    Logger.debug("Relay process exited: #{inspect(reason)}")
+    Logger.debug("Relay process exiting: #{inspect(reason)}")
     {:stop, :normal, state}
   end
 
+  def handle_info(:attempt, %{lifecycle: :backoff} = state), do: attempt_connection(state)
+  def handle_info(:attempt, state), do: {:noreply, state}
+
   def handle_info({tag, _socket}, state) when tag in [:tcp_closed, :ssl_closed] do
     Logger.debug("Transport closed by remote #{state.uri.host}.")
-    new_state = %{state | closing?: true, ready?: false, websocket: nil}
-    {:stop, :normal, new_state}
+    connection_lost("closed by remote", state)
   end
 
   def handle_info(message, state) do
@@ -205,19 +258,18 @@ defmodule NostrEx.Socket do
           |> handle_responses(responses)
 
         if new_state.closing? do
-          do_close(new_state)
+          reason = new_state.last_error || "closed by remote"
+          connection_lost(reason, new_state)
         else
           {:noreply, new_state}
         end
 
       {:error, _conn, %Mint.TransportError{reason: :closed}, _responses} ->
-        new_state = %{state | closing?: true, ready?: false, websocket: nil}
-        {:stop, :normal, new_state}
+        connection_lost("closed by remote", state)
 
       {:error, conn, reason, _responses} ->
         Logger.error("WebSocket stream error: #{inspect(reason)}")
-        new_state = %{state | conn: conn} |> reply_to_caller({:error, error_message(reason)})
-        {:noreply, new_state}
+        {:noreply, %{state | conn: conn}}
 
       :unknown ->
         {:noreply, state}
@@ -294,6 +346,7 @@ defmodule NostrEx.Socket do
   @spec build_status(%__MODULE__{}) :: %{
           url: String.t(),
           name: String.t(),
+          state: :connecting | :ready | :backoff | :failed | :closing,
           ready?: boolean(),
           closing?: boolean()
         }
@@ -301,6 +354,7 @@ defmodule NostrEx.Socket do
     %{
       url: URI.to_string(state.uri),
       name: state.name,
+      state: state.lifecycle,
       closing?: state.closing?,
       ready?: state.ready?
     }
@@ -323,13 +377,31 @@ defmodule NostrEx.Socket do
   defp handle_response({:done, ref}, %{request_ref: ref} = state) do
     case Mint.WebSocket.new(state.conn, ref, state.status, state.resp_headers) do
       {:ok, conn, websocket} ->
-        %{state | conn: conn, websocket: websocket, status: nil, resp_headers: nil, ready?: true}
-        |> reply_to_caller({:ok, :connected})
+        state =
+          %{
+            state
+            | conn: conn,
+              websocket: websocket,
+              status: nil,
+              resp_headers: nil,
+              ready?: true,
+              lifecycle: :ready,
+              attempt: 0,
+              closing?: false,
+              last_error: nil
+          }
+
+        state = replay_subscriptions(state)
+        broadcast(:relay_events, {:relay_up, state.name})
+        state
 
       {:error, conn, reason} ->
-        # Mark closing? so handle_info tears the connection down after replying.
-        %{state | conn: conn, closing?: true}
-        |> reply_to_caller({:error, "WebSocket upgrade failed: #{error_message(reason)}"})
+        %{
+          state
+          | conn: conn,
+            closing?: true,
+            last_error: "upgrade failed: #{error_message(reason)}"
+        }
     end
   end
 
@@ -341,8 +413,8 @@ defmodule NostrEx.Socket do
         |> handle_frames(frames)
 
       {:error, websocket, reason} ->
+        Logger.error("WebSocket decode error: #{inspect(reason)}")
         %{state | websocket: websocket}
-        |> reply_to_caller({:error, error_message(reason)})
     end
   end
 
@@ -472,30 +544,30 @@ defmodule NostrEx.Socket do
     state
   end
 
-  @spec do_close(%__MODULE__{}) :: {:stop, :normal, %__MODULE__{}}
-  defp do_close(state) do
-    # Streaming a close frame may fail if the server has already closed for writing
-    _ = send_frame(state, :close)
-
-    case state.conn do
-      nil ->
-        {:stop, :normal, state}
-
-      conn ->
-        Mint.HTTP.close(conn)
-        {:stop, :normal, state}
-    end
-  end
-
-  @spec reply_to_caller(%__MODULE__{}, term()) :: %__MODULE__{}
-  defp reply_to_caller(state, response) do
-    case state.caller do
+  # Replay every subscription recorded in the RelayAgent for this relay.
+  # The Agent is the source of truth: entries survive process death, so a
+  # crash-respawned socket restores subscriptions that were active before
+  # the crash, and subs recorded during an outage apply on reconnect.
+  @spec replay_subscriptions(%__MODULE__{}) :: %__MODULE__{}
+  defp replay_subscriptions(state) do
+    case RelayAgent.get(state.name) do
       nil ->
         state
 
-      caller ->
-        GenServer.reply(caller, response)
-        %{state | caller: nil}
+      subs ->
+        Enum.reduce(subs, state, fn {sub_id, payload}, acc ->
+          case send_text_frame(acc, payload) do
+            {:ok, new_acc} ->
+              new_acc
+
+            {:error, reason, new_acc} ->
+              Logger.warning(
+                "Relay #{state.uri.host}: failed to replay subscription #{sub_id}: #{inspect(reason)}"
+              )
+
+              new_acc
+          end
+        end)
     end
   end
 
@@ -508,6 +580,8 @@ defmodule NostrEx.Socket do
       for {pid, _} <- entries, do: send(pid, message)
     end)
   end
+
+  defp broadcast(topic, message), do: registry_dispatch(topic, message)
 
   @spec send_close_frame(%__MODULE__{}, binary()) :: :ok
   defp send_close_frame(%{websocket: nil}, _message), do: :ok

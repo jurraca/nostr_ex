@@ -31,94 +31,62 @@ defmodule NostrEx.RelayManager do
   end
 
   @doc """
-  Connect to the relay with `relay_url`.
-  Starts a child of the `RelayManager` supervisor as a `Socket`, then performs
-  the websocket handshake, blocking until the relay is ready or the handshake
-  fails (3 second timeout by default).
-  It will return `{:ok, name}` if a relay with that `relay_url` is already connected.
+  Ensure a socket exists for `relay_url` and wait for its first successful
+  handshake (up to `:readiness_timeout` ms, default 5000).
+
+  The Socket process drives its own connection attempts from spawn and
+  reconnects with exponential backoff on any later failure, so an error
+  return here does not stop the retry loop - the relay slot stays
+  registered and observable via `get_states/0` while it keeps trying.
+
+  ## Options
+  - `:readiness_timeout` - ms to wait for the handshake (default 5000)
+  - `:backoff_min` / `:backoff_max` - reconnect delay bounds (ms)
+  - `:max_attempts` - reconnect attempts before giving up (default `:infinity`)
   """
-  @spec connect(String.t()) :: {:ok, String.t()} | {:error, String.t()}
-  def connect(relay_url) do
+  @spec connect(String.t(), keyword()) :: {:ok, String.t()} | {:error, String.t()}
+  def connect(relay_url, opts \\ []) do
     with {:ok, uri} <- parse_url(relay_url) do
-      do_connect(uri, Utils.name_from_host(uri.host), attempts: 2)
-    end
-  end
+      name = Utils.name_from_host(uri.host)
 
-  @adopt_wait_ms 1_500
+      case DynamicSupervisor.start_child(
+             __MODULE__,
+             {Socket, %{uri: uri, name: name, opts: opts}}
+           ) do
+        {:ok, _pid} ->
+          :ok
 
-  @spec do_connect(URI.t(), String.t(), keyword()) ::
-          {:ok, String.t()} | {:error, String.t()}
-  defp do_connect(uri, relay_name, opts) do
-    case DynamicSupervisor.start_child(__MODULE__, {Socket, %{uri: uri, name: relay_name}}) do
-      {:ok, pid} ->
-        claim_new_child(pid, relay_name)
+        # Another caller already owns this relay slot; adopt it.
+        {:error, {:already_started, _pid}} ->
+          :ok
 
-      # Another caller already owns (or raced us on) this relay's socket.
-      # Adopt it: wait for readiness, and replace it if it never becomes ready.
-      {:error, {:already_started, pid}} ->
-        if wait_until_ready(pid, @adopt_wait_ms) do
-          {:ok, relay_name}
-        else
-          _ = terminate_quietly(pid)
-          retry_or_fail(uri, relay_name, opts)
-        end
-
-      {:error, reason} ->
-        {:error, inspect(reason)}
-    end
-  end
-
-  defp claim_new_child(pid, relay_name) do
-    case Socket.connect(pid) do
-      {:ok, :connected} ->
-        {:ok, relay_name}
-
-      {:error, reason} ->
-        # The handshake failed; make sure the child is cleaned up.
-        _ = terminate_quietly(pid)
-        {:error, reason}
-    end
-  end
-
-  defp retry_or_fail(uri, relay_name, opts) do
-    case Keyword.fetch!(opts, :attempts) - 1 do
-      0 -> {:error, "relay process unavailable"}
-      remaining -> do_connect(uri, relay_name, Keyword.put(opts, :attempts, remaining))
-    end
-  end
-
-  # Waits up to `timeout` ms for the socket at `pid` to finish its handshake.
-  # Treats a momentarily-unregistered (dying/restarting) child as "keep waiting".
-  @spec wait_until_ready(pid(), pos_integer()) :: boolean()
-  defp wait_until_ready(pid, timeout) do
-    deadline = System.monotonic_time(:millisecond) + timeout
-
-    do_wait_until_ready(pid, deadline)
-  end
-
-  defp do_wait_until_ready(pid, deadline) do
-    if ready_now?(pid) do
-      true
-    else
-      if System.monotonic_time(:millisecond) > deadline do
-        false
-      else
-        Process.sleep(20)
-        do_wait_until_ready(pid, deadline)
+        {:error, reason} ->
+          {:error, inspect(reason)}
+      end
+      |> case do
+        :ok -> wait_until_ready(name, Keyword.get(opts, :readiness_timeout, 5_000))
+        error -> error
       end
     end
   end
 
-  defp ready_now?(pid) do
-    match?(%{ready?: true}, Socket.get_status(pid))
-  catch
-    :exit, _ -> false
+  defp wait_until_ready(name, timeout) do
+    deadline = System.monotonic_time(:millisecond) + timeout
+    do_wait_until_ready(name, deadline)
   end
 
-  defp terminate_quietly(pid) do
-    DynamicSupervisor.terminate_child(__MODULE__, pid)
-  catch
-    :exit, _ -> :ok
+  defp do_wait_until_ready(name, deadline) do
+    cond do
+      ready?(name) == true ->
+        {:ok, name}
+
+      System.monotonic_time(:millisecond) > deadline ->
+        {:error, "relay #{name} not ready within readiness timeout"}
+
+      true ->
+        Process.sleep(20)
+        do_wait_until_ready(name, deadline)
+    end
   end
 
   @spec ready?(String.t()) :: boolean() | {:error, :not_found | String.t()}

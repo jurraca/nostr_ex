@@ -71,14 +71,17 @@ defmodule NostrEx.IntegrationTest do
       end)
     end
 
-    test "failed handshake leaves no orphan child", %{relay: relay} do
+    test "failed handshake keeps a retrying socket and reports the error", %{relay: relay} do
       port = FakeRelay.port(relay)
       :ok = FakeRelay.stop(relay)
 
-      assert {:error, _reason} = NostrEx.connect("ws://127.0.0.1:#{port}")
+      assert {:error, _reason} =
+               NostrEx.connect("ws://127.0.0.1:#{port}", readiness_timeout: 300)
 
+      # The relay slot persists and keeps retrying instead of vanishing.
       eventually(fn ->
-        assert NostrEx.RelayManager.active_pids() == []
+        assert [%{state: :backoff, name: "127.0.0.1"}] = NostrEx.RelayManager.get_states()
+        assert NostrEx.list_relays() == ["127.0.0.1"]
       end)
     end
 
@@ -138,18 +141,22 @@ defmodule NostrEx.IntegrationTest do
       assert {:error, :no_relays, []} = NostrEx.send_event(signed)
     end
 
-    test "sending to a killed-and-restarted socket errors without raising", %{relay: relay} do
+    test "sending to a killed socket recovers: respawn reconnects automatically", %{relay: relay} do
       {:ok, name} = NostrEx.connect(FakeRelay.url(relay))
       {:ok, pid} = NostrEx.RelayManager.lookup(name)
 
-      # Abnormal exit: transient restarts a blank socket under the same name.
+      # Abnormal exit: permanent restart respawns the slot, which immediately
+      # begins connecting again - no more blank zombies.
       Process.exit(pid, :kill)
 
       eventually(fn ->
-        assert {:ok, _new_pid} = NostrEx.RelayManager.lookup(name)
+        assert {:ok, new_pid} = NostrEx.RelayManager.lookup(name)
+        assert Process.alive?(new_pid)
+        assert match?(%{ready?: true}, NostrEx.Socket.get_status(new_pid))
       end)
 
-      assert match?({:error, _}, NostrEx.Socket.send_message(name, "[]"))
+      # The recovered socket accepts sends.
+      assert :ok = NostrEx.Socket.send_message(name, "[]")
     end
 
     test "send_event delivers to all connected relays concurrently" do
@@ -275,24 +282,100 @@ defmodule NostrEx.IntegrationTest do
     # (:tcp for ws://, :ssl for wss://). The clauses must treat both alike.
     @tags [:tcp_closed, :ssl_closed]
 
-    test "socket terminates cleanly on either transport-close tag", %{relay: relay} do
+    test "either transport-close tag notifies, backs off, and recovers", %{relay: relay} do
+      :ok = NostrEx.listen(:relay_events)
+
       for tag <- @tags do
         {:ok, name} = NostrEx.connect(FakeRelay.url(relay))
         {:ok, pid} = NostrEx.RelayManager.lookup(name)
-        status = NostrEx.Socket.get_status(pid)
-        assert status.ready?
+        assert %{ready?: true} = NostrEx.Socket.get_status(pid)
 
         # Synthesize the exact message shape Mint delivers on transport death.
         send(pid, {tag, :fake_socket})
 
+        assert_receive {:relay_down, ^name, _reason}, 5_000
+
+        # The socket stays registered, re-connects on its own, and announces it.
         eventually(fn ->
-          assert {:error, :not_found} = NostrEx.RelayManager.lookup(name)
+          assert {:ok, ^pid} = NostrEx.RelayManager.lookup(name)
+          assert match?(%{ready?: true}, NostrEx.Socket.get_status(pid))
         end)
 
-        # terminate/2 ran: subscription bookkeeping was cleaned up.
-        assert NostrEx.list_subs() == []
+        assert_receive {:relay_up, ^name}, 10_000
       end
     end
+  end
+
+  describe "reconnect and resubscribe" do
+    @fast_backoff [backoff_min: 20, backoff_max: 50]
+
+    test "socket recovers after a drop and replays its subscriptions", %{relay: relay} do
+      {:ok, name} = NostrEx.connect(FakeRelay.url(relay), @fast_backoff)
+      {:ok, sub} = NostrEx.subscribe(kinds: [1])
+
+      FakeRelay.drop_connections(relay)
+
+      # The socket backs off, reconnects to the still-listening relay, and
+      # replays the REQ from the Agent.
+      eventually(fn ->
+        assert %{ready?: true} = status(lookup!(name))
+        reqs = Enum.count(FakeRelay.received(relay), &String.contains?(&1, "\"REQ\""))
+        assert reqs >= 2, "expected replayed REQ, got #{reqs}"
+      end)
+
+      FakeRelay.push_event(relay, sub.id)
+
+      assert_receive {:event, sub_id, %NostrCore.Event{}}, 5_000
+      assert sub_id == sub.id
+    end
+
+    test "subscription recorded during an outage applies on recovery" do
+      port = 21_111
+
+      {:ok, relay_a} = FakeRelay.start_link(port: port)
+      url = FakeRelay.url(relay_a)
+      {:ok, name} = NostrEx.connect(url, @fast_backoff)
+      :ok = FakeRelay.stop(relay_a)
+
+      # Slot persists in backoff after the relay dies.
+      assert {:error, _} =
+               NostrEx.connect(url, Keyword.put(@fast_backoff, :readiness_timeout, 300))
+
+      {:ok, sub} = NostrEx.create_sub(kinds: [1])
+      :ok = NostrEx.listen(sub)
+
+      # Recorded even though the write fails - outage-queued.
+      assert {:error, "subscribe failed", [{^name, :not_ready}]} =
+               NostrEx.send_sub(sub, send_via: [name])
+
+      assert sub.id in NostrEx.list_subs()
+
+      # A relay comes back on the same address; the socket reconnects and
+      # the queued REQ is delivered.
+      {:ok, relay_b} = FakeRelay.start_link(port: port)
+
+      eventually(fn ->
+        assert %{ready?: true} = status(lookup!(name))
+
+        req =
+          FakeRelay.wait_for(relay_b, fn msgs ->
+            Enum.find(msgs, &String.contains?(&1, "\"REQ\""))
+          end)
+
+        assert is_binary(req)
+      end)
+
+      FakeRelay.push_eose(relay_b, sub.id)
+      sub_id = sub.id
+      assert_receive {:eose, ^sub_id, _host}, 5_000
+    end
+
+    defp lookup!(name) do
+      {:ok, pid} = NostrEx.RelayManager.lookup(name)
+      pid
+    end
+
+    defp status(pid), do: NostrEx.Socket.get_status(pid)
   end
 
   defp eventually(fun, timeout \\ 5_000) do

@@ -31,6 +31,8 @@ defmodule NostrEx.TestSupport.FakeRelay do
   - `:ip` - loopback address tuple to bind and report in the URL
     (default `{127, 0, 0, 1}`). Use e.g. `{127, 0, 0, 2}` to get a second
     relay with a *distinct hostname* (relay identity is host-based).
+  - `:port` - fixed port to bind instead of an ephemeral one (for
+    stop-the-relay-then-restart-on-same-port scenarios).
   """
   @spec start_link(keyword()) :: GenServer.on_start()
   def start_link(opts \\ []) do
@@ -126,6 +128,7 @@ defmodule NostrEx.TestSupport.FakeRelay do
   @impl GenServer
   def init(opts) do
     ip = Keyword.get(opts, :ip, {127, 0, 0, 1})
+    port = Keyword.get(opts, :port, 0)
     ref = make_ref()
 
     routes =
@@ -133,7 +136,7 @@ defmodule NostrEx.TestSupport.FakeRelay do
         {:_, [{"/[...]", NostrEx.TestSupport.FakeRelay.Handler, %{relay: self()}}]}
       ])
 
-    case :cowboy.start_clear(ref, [ip: ip, port: 0], %{
+    case :cowboy.start_clear(ref, [ip: ip, port: port], %{
            env: %{dispatch: routes}
          }) do
       {:ok, _pid} ->
