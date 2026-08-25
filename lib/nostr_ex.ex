@@ -69,7 +69,7 @@ defmodule NostrEx do
       iex> NostrEx.disconnect("wss://relay.damus.io")
       :ok
 
-      iex> NostrEx.disconnect("relay_damus_io")
+      iex> NostrEx.disconnect("relay.damus.io")
       :ok
   """
   @spec disconnect(relay_name()) :: :ok | {:error, :not_found | String.t()}
@@ -178,7 +178,7 @@ defmodule NostrEx do
       iex> NostrEx.send_event(signed)
       {:ok, "event_id_abc123...", []}
 
-      iex> NostrEx.send_event(signed, send_via: ["relay_damus_io"])
+      iex> NostrEx.send_event(signed, send_via: ["relay.damus.io"])
       {:ok, "event_id_abc123...", []}
   """
   @spec send_event(Event.t(), keyword()) ::

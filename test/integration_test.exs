@@ -105,6 +105,15 @@ defmodule NostrEx.IntegrationTest do
       assert {:ok, ^name} = NostrEx.connect(FakeRelay.url(relay))
       assert length(NostrEx.RelayManager.active_pids()) == 1
     end
+
+    test "URL case is normalized: uppercase host maps to the same relay", %{relay: relay} do
+      {:ok, _name} = NostrEx.connect(FakeRelay.url(relay))
+      url = FakeRelay.url(relay)
+      [scheme, rest] = String.split(url, "://", parts: 2)
+
+      assert {:ok, "127.0.0.1"} = NostrEx.connect(String.upcase(scheme) <> "://" <> rest)
+      assert length(NostrEx.RelayManager.active_pids()) == 1
+    end
   end
 
   describe "sending to dead relays" do

@@ -28,7 +28,7 @@ end
 ```elixir
 # Connect to a relay
 iex(1)> NostrEx.connect("wss://relay.example.com")
-{:ok, "relay_example_com"}
+{:ok, "relay.example.com"}
 ```
 
 Relays are tracked by names via the `RelayRegistry`. All public facing functions expect this name as input, so you don't have to worry about PIDs. See `RelayManager.registered_names/0`.

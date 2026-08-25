@@ -13,8 +13,4 @@ defmodule NostrEx.Application do
 
     Supervisor.start_link(children, strategy: :one_for_one)
   end
-
-  def get_relays() do
-    Application.get_env(:nostr_ex, :relays)
-  end
 end
