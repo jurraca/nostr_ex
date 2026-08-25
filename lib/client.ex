@@ -36,21 +36,12 @@ defmodule NostrEx.Client do
   def send_event(event, opts \\ [])
 
   def send_event(%Event{} = event, opts) do
-    {relay_names, bad_inputs} = get_relays(opts[:send_via])
+    {relay_names, rejected_inputs} = get_relays(opts[:send_via])
     payload = serialize(event)
 
-    fanout(
-      relay_names,
-      bad_inputs,
-      fanout_reasons("send failed"),
-      fn _oks -> event.id end,
-      fn relay ->
-        case send_to_relay(relay, payload) do
-          :ok -> {:ok, relay}
-          {:error, reason} -> {:error, relay, reason}
-        end
-      end
-    )
+    fanout(relay_names, rejected_inputs, "send failed", fn _delivered -> event.id end, fn relay ->
+      send_to_relay(relay, payload)
+    end)
   end
 
   @doc """
@@ -96,18 +87,15 @@ defmodule NostrEx.Client do
           {:ok, String.t(), [failure()]} | {:error, term(), [failure()]}
   def send_sub(%NostrEx.Subscription{id: sub_id, filters: filters}, opts \\ []) do
     message = serialize_subscription(sub_id, filters)
-    {relay_names, bad_inputs} = get_relays(opts[:send_via])
+    {relay_names, rejected_inputs} = get_relays(opts[:send_via])
 
     fanout(
       relay_names,
-      bad_inputs,
-      fanout_reasons("subscribe failed"),
-      fn _oks -> sub_id end,
+      rejected_inputs,
+      "subscribe failed",
+      fn _delivered -> sub_id end,
       fn relay_name ->
-        case subscribe_to_relay(relay_name, sub_id, message) do
-          :ok -> {:ok, relay_name}
-          {:error, reason} -> {:error, relay_name, reason}
-        end
+        subscribe_to_relay(relay_name, sub_id, message)
       end
     )
   end
@@ -134,25 +122,16 @@ defmodule NostrEx.Client do
       relays = RelayAgent.get_relays_for_sub(sub_id)
       request = Message.close(sub_id) |> Message.serialize()
 
-      fanout(
-        relays,
-        [],
-        fn
-          :all_failed -> "close failed"
-          :nothing_targeted -> "close failed"
-        end,
-        fn oks -> oks end,
-        fn relay_name ->
-          case send_to_relay(relay_name, request) do
-            :ok ->
-              RelayAgent.delete_subscription(relay_name, sub_id)
-              {:ok, relay_name}
+      fanout(relays, [], "close failed", &Function.identity/1, fn relay_name ->
+        case send_to_relay(relay_name, request) do
+          :ok ->
+            RelayAgent.delete_subscription(relay_name, sub_id)
+            :ok
 
-            {:error, reason} ->
-              {:error, relay_name, reason}
-          end
+          error ->
+            error
         end
-      )
+      end)
     end
   end
 
@@ -236,58 +215,58 @@ defmodule NostrEx.Client do
     |> Message.serialize()
   end
 
-  # Shared tail of every fan-out operation: merges per-relay failures with
-  # rejected inputs and decides between {:ok, oks, failures} and
-  # {:error, reason, failures}. `oks` holds whatever the per-relay attempt
-  # returned as its {:ok, value} payload.
-  @spec finish_fanout([{:ok, term()} | {:error, term(), term()}], [failure()], fun()) ::
-          {:ok, [term()], [failure()]} | {:error, term(), [failure()]}
-  defp finish_fanout(results, bad_inputs, reason_for) do
-    {oks, relay_failures} = Enum.split_with(results, &match?({:ok, _}, &1))
-
-    failures =
-      Enum.map(relay_failures, fn {:error, relay, reason} -> {relay, reason} end) ++ bad_inputs
-
-    cond do
-      oks != [] -> {:ok, Enum.map(oks, fn {:ok, value} -> value end), failures}
-      results == [] and bad_inputs != [] -> {:error, :no_relays, failures}
-      results == [] -> {:error, reason_for.(:nothing_targeted), []}
-      true -> {:error, reason_for.(:all_failed), failures}
-    end
-  end
-
   @fanout_concurrency 16
 
-  # Runs each per-relay attempt concurrently (input order preserved) and
-  # classifies the aggregate through finish_fanout. Timeouts belong to the
-  # inner GenServer.call (Socket.send_message) - tasks never time out.
-  @spec fanout([String.t()], [failure()], fun(), (list() -> term()), fun()) ::
+  # Runs `fun` against every relay concurrently (input order preserved) and
+  # folds the outcomes plus any rejected inputs into the shared fan-out
+  # contract. `fun` returns :ok or {:error, reason} per relay; timeouts
+  # belong to the inner GenServer.call - tasks never time out.
+  #
+  # - {:ok, success_value.(delivered_relays), failures}
+  # - {:error, :no_relays | fail_reason, failures}
+  @spec fanout([String.t()], [failure()], term(), ([String.t()] -> term()), fun()) ::
           {:ok, term(), [failure()]} | {:error, term(), [failure()]}
-  defp fanout(targets, bad_inputs, reason_for, value_for, attempt) do
-    results =
+  defp fanout(targets, rejected_inputs, fail_reason, success_value, fun) do
+    outcomes =
       targets
-      |> Task.async_stream(attempt,
+      |> Task.async_stream(&run_one(&1, fun),
         max_concurrency: @fanout_concurrency,
         timeout: :infinity
       )
-      |> Enum.zip(targets)
-      |> Enum.map(fn
-        {{:ok, res}, _relay} -> res
-        {{:exit, reason}, relay} -> {:error, relay, {:task_exit, reason}}
-      end)
+      |> Enum.map(&unwrap/1)
 
-    case finish_fanout(results, bad_inputs, reason_for) do
-      {:ok, oks, failures} -> {:ok, value_for.(oks), failures}
-      error -> error
+    failures =
+      for({relay, outcome} <- outcomes, outcome != :ok, do: {relay, outcome})
+      |> Enum.concat(rejected_inputs)
+
+    if Enum.any?(outcomes, &match?({_relay, :ok}, &1)) do
+      delivered = for {relay, :ok} <- outcomes, do: relay
+      {:ok, success_value.(delivered), failures}
+    else
+      {:error, if(outcomes == [], do: :no_relays, else: fail_reason), failures}
     end
   end
 
-  defp fanout_reasons(all_failed) do
-    fn
-      :all_failed -> all_failed
-      :nothing_targeted -> :no_relays
-    end
+  defp run_one(relay, fun) do
+    outcome =
+      try do
+        case fun.(relay) do
+          :ok -> :ok
+          {:error, reason} -> reason
+        end
+      rescue
+        e -> Exception.message(e)
+      catch
+        kind, value -> {kind, value}
+      end
+
+    {relay, outcome}
   end
+
+  # Tasks never time out; this row is only reachable on an untrappable kill,
+  # where the relay identity is unrecoverable.
+  defp unwrap({:ok, pair}), do: pair
+  defp unwrap({:exit, reason}), do: {nil, {:task_exit, reason}}
 
   @spec get_relays(nil | :all | String.t() | [String.t()]) :: {[String.t()], [failure()]}
   defp get_relays(nil), do: get_relays(:all)
