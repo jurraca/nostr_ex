@@ -33,6 +33,32 @@ iex(1)> NostrEx.connect("wss://relay.example.com")
 
 Relays are tracked by names via the `RelayRegistry`. All public facing functions expect this name as input, so you don't have to worry about PIDs. See `RelayManager.registered_names/0`.
 
+### Reconnecting
+
+Sockets are self-healing. Each socket owns its lifecycle: it connects on spawn, and if the relay is unreachable or drops the connection later, it retries automatically with full-jitter exponential backoff (default 500ms to 30s, infinite attempts). A relay that is down stays registered and visible in `NostrEx.relay_states/0` while it keeps retrying.
+
+```elixir
+# Wait up to 5s for the first handshake; tuning options available
+{:ok, "relay.damus.io"} = NostrEx.connect("wss://relay.damus.io",
+  backoff_min: 1_000,
+  backoff_max: 60_000
+)
+```
+
+Subscriptions survive disconnects: REQ payloads are recorded before being sent and replayed automatically after every successful handshake — including subscriptions created *while* a relay was down (they apply once it returns). Only a genuine relay `CLOSED` message removes a subscription.
+
+Connection lifecycle transitions can be observed from any process:
+
+```elixir
+NostrEx.listen(:relay_events)
+
+receive do
+  {:relay_up, name} -> IO.puts("#{name} is back")
+  {:relay_down, name, reason} -> IO.puts("#{name} down: #{reason}")
+  {:retry_scheduled, name, attempt, delay_ms} -> IO.puts("retrying #{name} in #{delay_ms}ms")
+end
+```
+
 ### Receiving Events
 
 Pass event filters to `create_sub/1`:
@@ -121,11 +147,11 @@ NostrEx.Nip05.verify("user@example.com")
 
 NostrEx uses a supervision tree with the following components:
 
-- `RelayManager`: supervises WebSocket connections to relays
-- `RelayAgent`: manages subscription state across relays
-- `Socket`: handles individual WebSocket connections
+- `RelayManager`: supervises relay slots; each child `Socket` drives its own connection, reconnecting with exponential backoff on failure
+- `RelayAgent`: source of truth for subscription payloads across relays (survives socket death, enabling replay-on-reconnect)
+- `Socket`: one self-connecting process per relay; replays subscriptions after each handshake
 - `PubSub`: use Registry to dispatch events to listeners
-- `RelayRegistry`: Registry for mapping relay names to connection pids
+- `RelayRegistry`: Registry for mapping relay names to socket pids
 
 Event, tag, filter, and message primitives come from [NostrCore](https://github.com/jurraca/nostr_core) (events, filters, tags, messages, bech32/NIP-19, secp256k1 crypto).
 This dependency compiles the libsecp256k1 C library for cryptographic operations,

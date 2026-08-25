@@ -4,3 +4,34 @@
 
 Initial version published.
 
+
+### 2026-08-25
+
+Unreleased changes:
+
+- **Reconnecting sockets.** Each socket owns its lifecycle: it connects
+  itself on spawn and retries with full-jitter exponential backoff
+  (default 500ms..30s, infinite attempts) after any failure. Sockets are
+  `permanent` children, so crashes respawn into an immediate reconnect
+  instead of leaving blank zombies.
+- **Resubscribe on reconnect.** `RelayAgent` now stores serialized REQ
+  payloads (`%{relay => %{sub_id => payload}}`) as the source of truth;
+  sockets replay them after every successful handshake. Subscriptions
+  recorded while a relay is down are kept (outage-queued) and apply once
+  the relay returns; only a genuine relay `CLOSED` removes an entry.
+- **Lifecycle notifications.** `NostrEx.listen(:relay_events)` receives
+  `{:relay_up, name}`, `{:relay_down, name, reason}` and
+  `{:retry_scheduled, name, attempt, delay_ms}`.
+- **API changes:**
+  - `NostrEx.connect/2` accepts options: `:readiness_timeout`,
+    `:backoff_min`, `:backoff_max`, `:max_attempts`.
+  - A relay that is down at connect time stays registered and retrying
+    instead of returning an error and disappearing; `connect/2` only
+    waits for the *first* handshake.
+  - `NostrEx.Socket.connect/1-2` removed (connection is internalized).
+  - Unified fan-out error contract across `send_event`/`send_sub`/
+    `close_sub`: `{:ok, value, failures}` / `{:error, reason, failures}`;
+    unknown `send_via` entries appear in failures as
+    `{input, :not_connected}` instead of being silently dropped.
+  - Dead-relay sends return `{:error, :relay_down}` / `{:error,
+    :send_timeout}` rather than crashing the caller.
