@@ -309,24 +309,61 @@ defmodule NostrEx.IntegrationTest do
   describe "reconnect and resubscribe" do
     @fast_backoff [backoff_min: 20, backoff_max: 50]
 
-    test "socket recovers after a drop and replays its subscriptions", %{relay: relay} do
+    test "retry cadence during a reject window, then recovery with replay", %{relay: relay} do
       {:ok, name} = NostrEx.connect(FakeRelay.url(relay), @fast_backoff)
       {:ok, sub} = NostrEx.subscribe(kinds: [1])
 
-      FakeRelay.drop_connections(relay)
+      base_count = FakeRelay.connection_count(relay)
 
-      # The socket backs off, reconnects to the still-listening relay, and
-      # replays the REQ from the Agent.
+      # Deterministic outage: existing conn gets a close frame (processed
+      # client-side, no TCP-timing), new conns are 1013-rejected for 600ms.
+      :ok = FakeRelay.reject_window(relay, 600)
+      FakeRelay.close_gracefully(relay)
+
       eventually(fn ->
-        assert %{ready?: true} = status(lookup!(name))
+        assert %{state: :backoff} = status(lookup!(name))
+      end)
+
+      # Still inside the window: retries land and get rejected.
+      Process.sleep(400)
+      mid_count = FakeRelay.connection_count(relay)
+      assert mid_count >= base_count + 2, "expected retry attempts, got #{mid_count}"
+
+      # Window expires; the next attempt succeeds and replays the REQ.
+      eventually(fn ->
+        assert %{ready?: true, attempt: 0} = status(lookup!(name))
+
         reqs = Enum.count(FakeRelay.received(relay), &String.contains?(&1, "\"REQ\""))
         assert reqs >= 2, "expected replayed REQ, got #{reqs}"
       end)
 
       FakeRelay.push_event(relay, sub.id)
 
-      assert_receive {:event, sub_id, %NostrCore.Event{}}, 5_000
-      assert sub_id == sub.id
+      sub_id = sub.id
+      assert_receive {:event, ^sub_id, %NostrCore.Event{}}, 5_000
+    end
+
+    test "max_attempts halts the loop in a terminal :failed state" do
+      {:ok, relay} = FakeRelay.start_link()
+      url = FakeRelay.url(relay)
+      :ok = FakeRelay.stop(relay)
+
+      opts = [
+        backoff_min: 20,
+        backoff_max: 30,
+        max_attempts: 3,
+        readiness_timeout: 200
+      ]
+
+      assert {:error, _} = NostrEx.connect(url, opts)
+
+      eventually(fn ->
+        assert %{state: :failed, attempt: 3} = status(lookup!("127.0.0.1"))
+      end)
+
+      # The loop is truly stopped: attempt count frozen after a grace period.
+      Process.sleep(300)
+      assert %{state: :failed, attempt: 3} = status(lookup!("127.0.0.1"))
     end
 
     test "subscription recorded during an outage applies on recovery" do
@@ -336,6 +373,11 @@ defmodule NostrEx.IntegrationTest do
       url = FakeRelay.url(relay_a)
       {:ok, name} = NostrEx.connect(url, @fast_backoff)
       :ok = FakeRelay.stop(relay_a)
+
+      # Wait until the surviving slot notices the loss before asserting.
+      eventually(fn ->
+        refute match?(%{ready?: true}, status(lookup!(name)))
+      end)
 
       # Slot persists in backoff after the relay dies.
       assert {:error, _} =

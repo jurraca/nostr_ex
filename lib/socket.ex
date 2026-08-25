@@ -104,12 +104,14 @@ defmodule NostrEx.Socket do
 
   @doc """
   Get the status of the current connection.
-  Returns the `url`, `name`, lifecycle `state`, `ready?` and `closing?`.
+  Returns the `url`, `name`, lifecycle `state`, `attempt`, `ready?` and
+  `closing?`.
   """
   @spec get_status(pid()) :: %{
           url: String.t(),
           name: String.t(),
           state: :connecting | :ready | :backoff | :failed | :closing,
+          attempt: non_neg_integer(),
           ready?: boolean(),
           closing?: boolean()
         }
@@ -347,6 +349,7 @@ defmodule NostrEx.Socket do
           url: String.t(),
           name: String.t(),
           state: :connecting | :ready | :backoff | :failed | :closing,
+          attempt: non_neg_integer(),
           ready?: boolean(),
           closing?: boolean()
         }
@@ -355,6 +358,7 @@ defmodule NostrEx.Socket do
       url: URI.to_string(state.uri),
       name: state.name,
       state: state.lifecycle,
+      attempt: state.attempt,
       closing?: state.closing?,
       ready?: state.ready?
     }

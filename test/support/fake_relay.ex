@@ -22,7 +22,7 @@ defmodule NostrEx.TestSupport.FakeRelay do
 
   @test_privkey "6dba065ffb6f51b4023d7d24a0c91c125c42ceff344d744d00f3c76e6cb5e03e"
 
-  defstruct [:ref, :port, :ip_string, handlers: %{}, received: []]
+  defstruct [:ref, :port, :ip_string, handlers: %{}, received: [], conn_count: 0, reject_until: nil]
 
   ## Public API
 
@@ -91,6 +91,19 @@ defmodule NostrEx.TestSupport.FakeRelay do
   @doc "Send a proper websocket close frame, letting Cowboy finish the handshake."
   def close_gracefully(server), do: broadcast(server, {:relay_send, {:close, 1000, ""}})
 
+  @doc """
+  For the next `ms` milliseconds, newly accepted websocket connections are
+  closed immediately with 1013 (Try Again Later). Existing connections are
+  untouched - pair with `close_gracefully/1` for a fully deterministic
+  outage simulation that never depends on TCP teardown timing.
+  """
+  def reject_window(server, ms) when is_integer(ms) and ms > 0,
+    do: GenServer.cast(server, {:reject_window, ms})
+
+  @doc "Total websocket connections accepted since start (rejected ones included)."
+  @spec connection_count(pid()) :: non_neg_integer()
+  def connection_count(server), do: GenServer.call(server, :connection_count)
+
   ## Inspection
 
   @doc "Raw text frames received from clients, in chronological order."
@@ -136,7 +149,7 @@ defmodule NostrEx.TestSupport.FakeRelay do
         {:_, [{"/[...]", NostrEx.TestSupport.FakeRelay.Handler, %{relay: self()}}]}
       ])
 
-    case :cowboy.start_clear(ref, [ip: ip, port: port], %{
+    case :cowboy.start_clear(ref, [ip: ip, port: port, reuseaddr: true], %{
            env: %{dispatch: routes}
          }) do
       {:ok, _pid} ->
@@ -144,7 +157,9 @@ defmodule NostrEx.TestSupport.FakeRelay do
          %__MODULE__{
            ref: ref,
            port: :ranch.get_port(ref),
-           ip_string: ip |> :inet.ntoa() |> List.to_string()
+           ip_string: ip |> :inet.ntoa() |> List.to_string(),
+           conn_count: 0,
+           reject_until: nil
          }}
 
       {:error, reason} ->
@@ -161,16 +176,30 @@ defmodule NostrEx.TestSupport.FakeRelay do
 
   def handle_call(:received, _from, state), do: {:reply, Enum.reverse(state.received), state}
 
+  def handle_call(:connection_count, _from, state), do: {:reply, state.conn_count, state}
+
+  # Called by each handler at websocket_init: registers the connection in
+  # the count and reports whether this conn should be rejected (1013).
+  def handle_call(:conn_start, _from, state) do
+    rejecting? =
+      is_integer(state.reject_until) and System.monotonic_time(:millisecond) < state.reject_until
+
+    {:reply, {state.conn_count + 1, rejecting?}, %{state | conn_count: state.conn_count + 1}}
+  end
+
   @impl GenServer
-  def handle_cast({:conn_up, pid}, state) do
+  def handle_call({:conn_up, pid}, _from, state) do
     ref = Process.monitor(pid)
-    {:noreply, %{state | handlers: Map.put(state.handlers, ref, pid)}}
+    {:reply, :ok, %{state | handlers: Map.put(state.handlers, ref, pid)}}
   end
 
   def handle_cast({:frame_in, text}, state),
     do: {:noreply, %{state | received: [text | state.received]}}
 
   def handle_cast(:clear_received, state), do: {:noreply, %{state | received: []}}
+
+  def handle_cast({:reject_window, ms}, state),
+    do: {:noreply, %{state | reject_until: System.monotonic_time(:millisecond) + ms}}
 
   def handle_cast({:broadcast, msg}, state) do
     for {_ref, pid} <- state.handlers, do: send(pid, msg)
@@ -217,13 +246,24 @@ defmodule NostrEx.TestSupport.FakeRelay.Handler do
   @behaviour :cowboy_websocket
 
   @impl true
-  def init(req, state) do
-    {:cowboy_websocket, req, state, %{idle_timeout: :infinity}}
+  def init(req, %{relay: relay} = state) do
+    {_count, rejecting?} = GenServer.call(relay, :conn_start)
+
+    if rejecting? do
+      # Refuse at the HTTP layer - no websocket upgrade happens, so the
+      # client sees a clean handshake failure (no half-open illusions).
+      req = :cowboy_req.reply(503, %{}, ~c"try again later", req)
+      {:ok, req, state}
+    else
+      {:cowboy_websocket, req, state, %{idle_timeout: :infinity}}
+    end
   end
 
   @impl true
   def websocket_init(%{relay: relay} = state) do
-    GenServer.cast(relay, {:conn_up, self()})
+    # Synchronous: guarantees the handler is registered before the upgrade
+    # response is written, so client-visible readiness implies scriptability.
+    :ok = GenServer.call(relay, {:conn_up, self()})
     {:ok, state}
   end
 
