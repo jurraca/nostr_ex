@@ -7,6 +7,7 @@ defmodule NostrEx.MixProject do
       app: :nostr_ex,
       version: @version,
       elixir: "~> 1.16",
+      elixirc_paths: elixirc_paths(Mix.env()),
       start_permanent: Mix.env() == :prod,
       deps: deps(),
       description: description(),
@@ -52,12 +53,16 @@ defmodule NostrEx.MixProject do
     ]
   end
 
+  defp elixirc_paths(:test), do: ["lib", "test/support"]
+  defp elixirc_paths(_), do: ["lib"]
+
   # Run "mix help deps" to learn about dependencies.
   defp deps do
     [
       {:nostr_core, github: "jurraca/nostr_core"},
       {:mint_web_socket, "~> 1.0.5"},
       {:req, "~> 0.7.2"},
+      {:cowboy, "~> 2.12", only: :test},
       {:ex_doc, "~> 0.40.3", only: :dev, runtime: false, warn_if_outdated: true}
     ]
   end
