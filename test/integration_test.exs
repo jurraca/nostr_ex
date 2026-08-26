@@ -501,7 +501,7 @@ defmodule NostrEx.IntegrationTest do
     end
 
     test "the global :ok topic is gone" do
-      assert_raise FunctionClauseError, fn -> NostrEx.listen(:ok) end
+      assert_raise FunctionClauseError, fn -> apply(NostrEx, :listen, [:ok]) end
     end
   end
 
