@@ -201,10 +201,12 @@ defmodule NostrEx.TestSupport.FakeRelay do
     {:reply, :ok, %{state | handlers: Map.put(state.handlers, ref, pid)}}
   end
 
+  @impl GenServer
   def handle_cast({:frame_in, text}, state),
     do: {:noreply, %{state | received: [text | state.received]}}
 
   # Auto-generated OK for a received EVENT (real-relay behavior).
+  @impl GenServer
   def handle_cast({:auto_ok, event_id}, state) do
     frame = Message.serialize({:ok, event_id, true, ""})
     for {_ref, pid} <- state.handlers, do: send(pid, {:relay_send, {:text, frame}})
@@ -212,16 +214,20 @@ defmodule NostrEx.TestSupport.FakeRelay do
     {:noreply, state}
   end
 
+  @impl GenServer
   def handle_cast(:clear_received, state), do: {:noreply, %{state | received: []}}
 
+  @impl GenServer
   def handle_cast({:reject_window, ms}, state),
     do: {:noreply, %{state | reject_until: System.monotonic_time(:millisecond) + ms}}
 
+  @impl GenServer
   def handle_cast({:broadcast, msg}, state) do
     for {_ref, pid} <- state.handlers, do: send(pid, msg)
     {:noreply, state}
   end
 
+  @impl GenServer
   def handle_cast(:force_drop, state) do
     # Close the TCP ports directly rather than killing the handler
     # processes: port_close produces an immediate FIN, while killing
