@@ -3,6 +3,8 @@ defmodule NostrEx.IntegrationTest do
 
   alias NostrEx.TestSupport.FakeRelay
 
+  @moduletag capture_log: true
+
   setup do
     # Transient restarts can land asynchronously after a previous test's
     # cleanup, leaving a blank socket registered globally. Purge any

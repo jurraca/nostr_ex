@@ -157,7 +157,7 @@ defmodule NostrEx.TestSupport.FakeRelay do
         {:_, [{"/[...]", NostrEx.TestSupport.FakeRelay.Handler, %{relay: self()}}]}
       ])
 
-    case :cowboy.start_clear(ref, [ip: ip, port: port, reuseaddr: true], %{
+    case :cowboy.start_clear(ref, [ip: ip, port: port], %{
            env: %{dispatch: routes}
          }) do
       {:ok, _pid} ->
