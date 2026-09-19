@@ -37,7 +37,10 @@ defmodule NostrEx.RelayManager do
   The Socket process drives its own connection attempts from spawn and
   reconnects with exponential backoff on any later failure, so an error
   return here does not stop the retry loop - the relay slot stays
-  registered and observable via `get_states/0` while it keeps trying.
+  registered and observable via `get_states/0` while it keeps trying. When
+  `:max_attempts` is set and exhausted, the socket terminates itself: the
+  slot is removed and `{:relay_failed, name, attempts}` is broadcast on
+  the `:relay_events` topic.
 
   ## Options
   - `:readiness_timeout` - ms to wait for the handshake (default 5000)

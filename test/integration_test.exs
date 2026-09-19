@@ -345,10 +345,12 @@ defmodule NostrEx.IntegrationTest do
       assert_receive {:event, ^sub_id, %NostrCore.Event{}}, 5_000
     end
 
-    test "max_attempts halts the loop in a terminal :failed state" do
+    test "max_attempts exhausts the retry loop and removes the relay slot" do
       {:ok, relay} = FakeRelay.start_link()
       url = FakeRelay.url(relay)
       :ok = FakeRelay.stop(relay)
+
+      :ok = NostrEx.listen(:relay_events)
 
       opts = [
         backoff_min: 20,
@@ -359,13 +361,18 @@ defmodule NostrEx.IntegrationTest do
 
       assert {:error, _} = NostrEx.connect(url, opts)
 
+      # Give-up is announced on the lifecycle topic.
+      assert_receive {:relay_failed, "127.0.0.1", 3}, 5_000
+
+      # The slot is gone: not registered, not resurrectable.
       eventually(fn ->
-        assert %{state: :failed, attempt: 3} = status(lookup!("127.0.0.1"))
+        assert {:error, :not_found} = NostrEx.RelayManager.lookup("127.0.0.1")
+        refute "127.0.0.1" in NostrEx.RelayManager.registered_names()
       end)
 
-      # The loop is truly stopped: attempt count frozen after a grace period.
+      # Still gone after a grace period: no supervisor respawn.
       Process.sleep(300)
-      assert %{state: :failed, attempt: 3} = status(lookup!("127.0.0.1"))
+      assert {:error, :not_found} = NostrEx.RelayManager.lookup("127.0.0.1")
     end
 
     test "subscription recorded during an outage applies on recovery" do

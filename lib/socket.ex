@@ -5,9 +5,10 @@ defmodule NostrEx.Socket do
   subscriptions after each successful handshake.
 
   The process represents the relay (its Registry name exists from spawn),
-  not the connection - being alive means trying to be ready. It only ever
-  exits when the supervisor removes it (`RelayManager.disconnect/1`); a
-  crash respawns a fresh socket that immediately starts connecting again.
+  not the connection - being alive means trying to be ready. It exits in
+  two cases: when the supervisor removes it (`RelayManager.disconnect/1`),
+  and when the reconnect loop exhausts `:max_attempts` (when set). A crash
+  respawns a fresh socket that immediately starts connecting again.
 
   Once in `ready?: true` state messages can be sent via `send_message/2`,
   which returns `{:error, :not_ready}` while connecting or backing off.
@@ -17,18 +18,24 @@ defmodule NostrEx.Socket do
     %{
       url: URI.to_string(state.uri),
       name: state.name,
-      state: :connecting | :ready | :backoff | :failed | :closing,
+      state: :connecting | :ready | :backoff | :closing,
       closing?: state.closing?,
       ready?: state.ready?
     }
   ```
 
   Lifecycle transitions are announced on the `:relay_events` pubsub topic:
-  `{:relay_up, name}`, `{:relay_down, name, reason}` and
-  `{:retry_scheduled, name, attempt, delay_ms}`.
+  `{:relay_up, name}`, `{:relay_down, name, reason}`,
+  `{:retry_scheduled, name, attempt, delay_ms}` and
+  `{:relay_failed, name, attempts}` (the reconnect loop gave up; the relay
+  slot is removed).
+
+  The child spec is `restart: :transient`: crash exits respawn the socket,
+  while the deliberate give-up exit is final - the DynamicSupervisor drops
+  the child and the registry entry disappears.
   """
 
-  use GenServer, restart: :permanent
+  use GenServer, restart: :transient
 
   require Logger
 
@@ -110,7 +117,7 @@ defmodule NostrEx.Socket do
   @spec get_status(pid()) :: %{
           url: String.t(),
           name: String.t(),
-          state: :connecting | :ready | :backoff | :failed | :closing,
+          state: :connecting | :ready | :backoff | :closing,
           attempt: non_neg_integer(),
           ready?: boolean(),
           closing?: boolean()
@@ -184,7 +191,10 @@ defmodule NostrEx.Socket do
   defp schedule_retry(%{max_attempts: max} = state) when is_integer(max) do
     if state.attempt >= max do
       Logger.error("Relay #{state.uri.host}: giving up after #{state.attempt} attempts")
-      {:noreply, %{state | lifecycle: :failed}}
+      broadcast(:relay_events, {:relay_failed, state.name, state.attempt})
+      # Transient child: a :shutdown exit is final - the supervisor drops
+      # the slot instead of respawning it into another retry loop.
+      {:stop, {:shutdown, :max_attempts}, state}
     else
       do_schedule_retry(state)
     end
@@ -352,7 +362,7 @@ defmodule NostrEx.Socket do
   @spec build_status(%__MODULE__{}) :: %{
           url: String.t(),
           name: String.t(),
-          state: :connecting | :ready | :backoff | :failed | :closing,
+          state: :connecting | :ready | :backoff | :closing,
           attempt: non_neg_integer(),
           ready?: boolean(),
           closing?: boolean()
