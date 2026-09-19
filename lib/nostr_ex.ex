@@ -34,9 +34,10 @@ defmodule NostrEx do
   - `NostrEx.create_sub/1` - Create subscriptions
   - `NostrEx.send_sub/2` - Send subscriptions
   - `NostrEx.close_sub/1` - Close subscriptions
+  - `NostrEx.query/2` - Run a bounded one-shot query
   """
 
-  alias NostrEx.{Client, RelayAgent, RelayManager, Subscription}
+  alias NostrEx.{Client, Query, RelayAgent, RelayManager, Subscription}
   alias NostrCore.Event
 
   @type relay_name :: String.t()
@@ -277,6 +278,48 @@ defmodule NostrEx do
       {:ok, sub}
     end
   end
+
+  @doc """
+  Run a bounded one-shot query and return the collected events.
+
+  Opens a REQ, collects events until every relay that received it has answered
+  (EOSE or CLOSED), the timeout elapses, or `:max_events` is reached, then
+  always closes the subscription. This is the function-call counterpart to
+  `subscribe/2`: use it for profiles, follow lists, relay lists and bounded
+  backfills rather than live updates.
+
+  Runs in the calling process and blocks until complete — wrap in a `Task` if
+  the caller must not block. Relays must already be connected; `:send_via`
+  selects among them (or pass URLs, which are normalized like `send_sub/2`).
+
+  Returns `{:ok, %NostrEx.Query.Result{}}`, `{:error, reason}` for invalid
+  filters, or the `send_sub/2` fan-out error (`{:error, reason, failures}`)
+  when nothing was delivered.
+
+  ## Options
+
+  - `:send_via` - Relay names or URLs. Defaults to all connected relays.
+  - `:timeout` - Overall wall-clock budget in ms (default 10_000).
+  - `:max_events` - Stop early once this many events are collected.
+  - `:on_event` - `(NostrCore.Event.t() -> any())` invoked for each deduped
+    event as it arrives, in the calling process. Additive: events are still
+    returned. Keep it cheap (a `cast`, not I/O) and let errors propagate.
+
+  ## Examples
+
+      iex> NostrEx.query([authors: [pubkey], kinds: [3]], send_via: [relay])
+      {:ok, %NostrEx.Query.Result{events: [...], eose_from: ["relay.example.com"], ...}}
+
+      iex> NostrEx.query([authors: pubkeys, kinds: [10002]],
+      ...>   send_via: ["purplepag.es"],
+      ...>   on_event: fn event -> send(self(), {:event, event}) end)
+      {:ok, %NostrEx.Query.Result{completion: :eose}}
+  """
+  @spec query(Subscription.filters_input(), keyword()) ::
+          {:ok, Query.Result.t()}
+          | {:error, term(), [Client.failure()]}
+          | {:error, String.t()}
+  def query(filters, opts \\ []), do: Query.run(filters, opts)
 
   @doc """
   Close a subscription.
