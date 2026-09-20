@@ -77,19 +77,19 @@ defmodule NostrEx.RelayAgentTest do
   end
 
   test "inverts the relay->subs mapping to sub->relays" do
-    :ok = RelayAgent.put_subscription("relay.damus.io", "sub_1", "p")
-    :ok = RelayAgent.put_subscription("relay.damus.io", "sub_2", "p")
+    :ok = RelayAgent.put_subscription("relay.example.com", "sub_1", "p")
+    :ok = RelayAgent.put_subscription("relay.example.com", "sub_2", "p")
     # sub_1 on both relays
     :ok = RelayAgent.put_subscription("relay.nostr.band", "sub_1", "p")
 
     result = RelayAgent.get_relays_by_sub()
-    assert result["sub_1"] |> Enum.sort() == ["relay.damus.io", "relay.nostr.band"]
-    assert result["sub_2"] == ["relay.damus.io"]
+    assert result["sub_1"] |> Enum.sort() == ["relay.example.com", "relay.nostr.band"]
+    assert result["sub_2"] == ["relay.example.com"]
   end
 
   test "unique subscriptions flatten across relays" do
-    :ok = RelayAgent.put_subscription("relay.damus.io", "sub_1", "p")
-    :ok = RelayAgent.put_subscription("relay.damus.io", "sub_2", "p")
+    :ok = RelayAgent.put_subscription("relay.example.com", "sub_1", "p")
+    :ok = RelayAgent.put_subscription("relay.example.com", "sub_2", "p")
     :ok = RelayAgent.put_subscription("relay.nostr.band", "sub_1", "p")
 
     assert RelayAgent.get_unique_subscriptions() |> Enum.sort() == ["sub_1", "sub_2"]

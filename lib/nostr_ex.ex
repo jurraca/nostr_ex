@@ -5,7 +5,7 @@ defmodule NostrEx do
   ## Quick Start
 
       # Connect to a relay
-      {:ok, "relay.damus.io"} = NostrEx.connect("wss://relay.damus.io")
+      {:ok, "relay.example.com"} = NostrEx.connect("wss://relay.example.com")
 
       # Create sub, register the caller to receive its events, then send it
       {:ok, sub} = NostrEx.create_sub(authors: [pubkey], kinds: [1])
@@ -61,8 +61,8 @@ defmodule NostrEx do
 
   ## Examples
 
-      iex> NostrEx.connect("wss://relay.damus.io")
-      {:ok, "relay.damus.io"}
+      iex> NostrEx.connect("wss://relay.example.com")
+      {:ok, "relay.example.com"}
 
       iex> NostrEx.connect("invalid")
       {:error, "Invalid URL"}
@@ -78,10 +78,10 @@ defmodule NostrEx do
 
   ## Examples
 
-      iex> NostrEx.disconnect("wss://relay.damus.io")
+      iex> NostrEx.disconnect("wss://relay.example.com")
       :ok
 
-      iex> NostrEx.disconnect("relay.damus.io")
+      iex> NostrEx.disconnect("relay.example.com")
       :ok
   """
   @spec disconnect(relay_name()) :: :ok | {:error, :not_found | String.t()}
@@ -108,7 +108,7 @@ defmodule NostrEx do
   ## Examples
 
       iex> NostrEx.list_relays()
-      ["relay.damus.io", "relay.nostr.band"]
+      ["relay.example.com", "relay.nostr.band"]
   """
   @spec list_relays() :: [relay_name()]
   def list_relays, do: RelayManager.registered_names()
@@ -190,7 +190,7 @@ defmodule NostrEx do
       iex> NostrEx.send_event(signed)
       {:ok, "event_id_abc123...", []}
 
-      iex> NostrEx.send_event(signed, send_via: ["relay.damus.io"])
+      iex> NostrEx.send_event(signed, send_via: ["relay.example.com"])
       {:ok, "event_id_abc123...", []}
   """
   @spec send_event(Event.t(), keyword()) ::
@@ -243,7 +243,7 @@ defmodule NostrEx do
       iex> NostrEx.send_sub(sub)
       {:ok, "123zyx...", []}
 
-      iex> NostrEx.send_sub(sub, send_via: ["relay.damus.io"])
+      iex> NostrEx.send_sub(sub, send_via: ["relay.example.com"])
       {:ok, "123zyx...", []}
   """
   @spec send_sub(Subscription.t(), keyword()) ::

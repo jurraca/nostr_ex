@@ -3,7 +3,7 @@ defmodule NostrEx.Utils do
 
   @doc """
   Takes a host name, returns a normalized string for use as a Registry key.
-  Example: "relay.damus.io" -> "relay.damus.io"
+  Example: "relay.example.com" -> "relay.example.com"
   """
   @spec name_from_host(String.t()) :: String.t()
   def name_from_host(host) when is_binary(host) do

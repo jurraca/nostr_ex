@@ -39,7 +39,7 @@ Sockets are self-healing. Each socket owns its lifecycle: it connects on spawn, 
 
 ```elixir
 # Wait up to 5s for the first handshake; tuning options available
-{:ok, "relay.damus.io"} = NostrEx.connect("wss://relay.damus.io",
+{:ok, "relay.example.com"} = NostrEx.connect("wss://relay.example.com",
   backoff_min: 1_000,
   backoff_max: 60_000
 )

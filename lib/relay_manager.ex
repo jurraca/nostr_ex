@@ -5,7 +5,7 @@ defmodule NostrEx.RelayManager do
   Nostr clients typically connect to multiple relays.
   When you `connect/1` to a relay, a child of this Supervisor is started, implemented by `NostrEx.Socket`.
   This process can be referenced by its `pid` or by the name it is registered under in the `Registry`.
-  By default the registered name is the relay URL host (lowercased), e.g. "relay.damus.io".
+  By default the registered name is the relay URL host (lowercased), e.g. "relay.example.com".
   Currently connected relays can be queried with:
   - `active_pids/0`: returns a list of this supervisor's children PIDs
   - `registered_names/0`: returns a list of Registry names for currently connected relay `pid`s.
