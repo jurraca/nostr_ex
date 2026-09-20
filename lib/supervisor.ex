@@ -2,7 +2,7 @@ defmodule NostrEx.Supervisor do
   @moduledoc """
   Embeddable supervision tree for nostr_ex.
 
-  Started automatically by `NostrEx.Application` unless
+  Started automatically by the application unless
   `config :nostr_ex, autostart: false` is set. Host applications may instead
   embed it anywhere in their own tree:
 
