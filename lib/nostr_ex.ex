@@ -25,6 +25,8 @@ defmodule NostrEx do
   - `NostrEx.Subscription` - Subscription struct and creation
   - `NostrEx.Client` - Internal client operations
   - `NostrEx.RelayManager` - Relay connection management
+  - `NostrEx.Query` - Bounded one-shot queries (see `query/2`)
+  - `NostrEx.Listener` - GenServer macro to consume subscriptions
 
   ## Public API
 

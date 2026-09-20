@@ -93,6 +93,62 @@ To subscribe to the given `sub_id` on a different process, call
 `Registry.register(NostrEx.PubSub, sub_id, nil)`.
 Similarly, unsubscribe the current process with `Registry.unregister(NostrEx.PubSub, sub_id)`.
 
+#### Standing consumers: `NostrEx.Listener`
+
+Raw `receive` is fine for a quick script, but a real app usually has a long-lived
+consumer whose subscriptions come and go. `use NostrEx.Listener` injects a
+GenServer that normalizes the dispatch vocabulary above into typed callbacks
+instead of hand-matching mailbox tuples:
+
+```elixir
+defmodule MyApp.NostrListener do
+  use NostrEx.Listener
+
+  @impl true
+  def handle_event(sub_id, event, state) do
+    IO.puts(event.content)
+    {:noreply, state}
+  end
+
+  # optional callbacks, each with a defoverridable no-op default:
+  #   handle_eose(sub_id, relay, state)
+  #   handle_close(sub_id, relay, message_or_nil, state)
+  #   handle_notice(sub_id, relay, message, state)
+  #   handle_publish_ack(event_id, info, state)
+  #   handle_relay_event({:relay_up, name} | ..., state)
+  #   handle_message(any_message, state)  # catch-all for everything else
+end
+
+# supervision tree
+children = [MyApp.NostrListener]
+
+# Subscribe the listener from anywhere: registration happens synchronously
+# inside the listener process, before the REQ hits the wire.
+{:ok, sub, failures} = NostrEx.Listener.subscribe(MyApp.NostrListener, kinds: [1])
+
+# ...or point it at things created elsewhere:
+NostrEx.Listener.listen(MyApp.NostrListener, sub_id)        # an existing subscription
+NostrEx.Listener.listen(MyApp.NostrListener, :relay_events) # connection lifecycle
+NostrEx.Listener.unlisten(MyApp.NostrListener, sub_id)
+```
+
+Unlike `NostrEx.subscribe/2`, `NostrEx.Listener.subscribe/3` returns the
+per-relay `failures` list — when the caller isn't the process receiving the
+events, that error signal is all it gets.
+
+#### One-shot fetches: `NostrEx.query/2`
+
+If you don't need live updates at all — fetching a profile, a follow list,
+relay lists, a bounded backfill — skip the subscription plumbing and use
+`NostrEx.query/2`, which collects events until every targeted relay has sent
+EOSE (or a timeout/event cap) and then closes the subscription for you:
+
+```elixir
+{:ok, result} = NostrEx.query([authors: [pubkey], kinds: [3]], send_via: ["relay.example.com"])
+result.events    # deduped, in arrival order
+result.eose_from # which relays actually answered
+```
+
 ### Sending Notes
 
 ```elixir
