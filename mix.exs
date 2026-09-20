@@ -41,7 +41,20 @@ defmodule NostrEx.MixProject do
       formatters: ["html"],
       source_ref: "v#{@version}",
       source_url: "https://github.com/jurraca/nostr_ex",
-      extras: ["README.md"]
+      extras: ["README.md"],
+      groups_for_modules: [
+        "Consuming events": [NostrEx.Listener, NostrEx.Query, NostrEx.Query.Result],
+        "Subscriptions": [NostrEx.Subscription],
+        "Signing & identity": [NostrEx.Signer, NostrEx.Signer.Local, NostrEx.Nip05],
+        "Internals": [
+          NostrEx.Client,
+          NostrEx.RelayManager,
+          NostrEx.Socket,
+          NostrEx.RelayAgent,
+          NostrEx.Supervisor,
+          NostrEx.Backoff
+        ]
+      ]
     ]
   end
 
