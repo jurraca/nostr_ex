@@ -72,7 +72,7 @@ defmodule NostrEx.MixProject do
   # Run "mix help deps" to learn about dependencies.
   defp deps do
     [
-      {:nostr_core, github: "jurraca/nostr_core"},
+      {:nostr_core, "~> 0.1.0"},
       {:mint_web_socket, "~> 1.0.5"},
       {:req, "~> 0.7.2"},
       {:cowboy, "~> 2.12", only: :test},
