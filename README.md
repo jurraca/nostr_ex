@@ -33,6 +33,23 @@ iex(1)> NostrEx.connect("wss://relay.example.com")
 
 Relays are tracked by names via the `RelayRegistry`. All public facing functions expect this name as input, so you don't have to worry about PIDs. See `RelayManager.registered_names/0`.
 
+### Subscriptions
+
+Pass event filters to `create_sub/1`:
+
+```elixir
+# Receive only new events
+now = DateTime.utc_now() |> DateTime.to_unix()
+NostrEx.create_sub(kinds: [1], since: now)
+> {:ok, %NostrEx.Subscription{...}}
+
+# Send the subscription
+NostrEx.send_sub(sub)
+> {:ok, "abc123f891..."}
+```
+
+Subscriptions survive disconnects: REQ payloads are recorded before being sent and replayed automatically after every successful handshake — including subscriptions created *while* a relay was down (they apply once it returns). Only a genuine relay `CLOSED` message removes a subscription.
+
 ### Reconnecting
 
 Sockets are self-healing. Each socket owns its lifecycle: it connects on spawn, and if the relay is unreachable or drops the connection later, it retries automatically with full-jitter exponential backoff (default 500ms to 30s, infinite attempts). A relay that is down stays registered and visible in `NostrEx.relay_states/0` while it keeps retrying.
@@ -44,8 +61,6 @@ Sockets are self-healing. Each socket owns its lifecycle: it connects on spawn, 
   backoff_max: 60_000
 )
 ```
-
-Subscriptions survive disconnects: REQ payloads are recorded before being sent and replayed automatically after every successful handshake — including subscriptions created *while* a relay was down (they apply once it returns). Only a genuine relay `CLOSED` message removes a subscription.
 
 Connection lifecycle transitions can be observed from any process:
 
@@ -61,21 +76,11 @@ end
 
 ### Receiving Events
 
-Pass event filters to `create_sub/1`:
-
-```elixir
-# Receive only new events
-now = DateTime.utc_now() |> DateTime.to_unix()
-NostrEx.create_sub(kinds: [1], since: now)
-> {:ok, %NostrEx.Subscription{...}}
-
-# Send the subscription
-NostrEx.send_sub(sub)
-> {:ok, "abc123f891..."}
-```
+There are two main modes of receiving events: use the provided `NostrEx.Listener` pattern, or roll your own via a custom GenServer or simple `receive` loop.
 
 NostrEx receives events at the process that created the subscription.
 A simple event handler to print kind 1 notes might look like:
+
 ```elixir
 receive do
   {:event, sub_id, %{kind: 1} = event} ->

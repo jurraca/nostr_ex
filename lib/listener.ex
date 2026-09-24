@@ -4,7 +4,7 @@ defmodule NostrEx.Listener do
 
   `use NostrEx.Listener`
   injects a GenServer that handles incoming messages for a subscription
-  into typed callbacks.
+  via callbacks.
 
       defmodule MyApp.NostrListener do
         use NostrEx.Listener
